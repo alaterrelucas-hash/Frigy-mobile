@@ -34,7 +34,7 @@ async function searchOpenFoodFacts(barcode) {
       name: p.product_name_fr || p.product_name || '',
       brand: p.brands || '',
       nutri: ['A','B','C','D','E'].includes((p.nutriscore_grade||'').toUpperCase()) ? (p.nutriscore_grade||'').toUpperCase() : null,
-      kcal: p.nutriments?.['energy-kcal_100g'] || null,
+      kcal: p.nutriments?.['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null,
       category: p.categories_tags?.[0]?.replace('en:','').replace(/-/g,' ') || '',
       imgUrl: p.image_front_small_url || p.image_small_url || p.image_url || p.image_front_url || null,
     };
@@ -94,8 +94,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const setupProfile = async (userId) => {
-    // Crée famille + profil si besoin (fonction SECURITY DEFINER, contourne RLS)
+  const setupProfile = async (userId, name = null) => {
     await supabase.rpc('setup_user_profile');
 
     const {data: profile} = await supabase
@@ -105,6 +104,9 @@ export default function App() {
       .single();
 
     if (profile?.family_id) {
+      if (name && (!profile.name || profile.name === 'Utilisateur')) {
+        await supabase.from('profiles').update({name}).eq('id', userId);
+      }
       setFamilyId(profile.family_id);
       fetchItems(profile.family_id);
     }
@@ -131,7 +133,7 @@ export default function App() {
   );
 
   if (!user) return (
-    <LoginScreen onLogin={(u) => { setUser(u); setupProfile(u.id); }}/>
+    <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }}/>
   );
 
   return (
@@ -200,7 +202,8 @@ function LoginScreen({onLogin}) {
       if (mode === 'signup') {
         const {data, error:e} = await supabase.auth.signUp({email, password});
         if (e) { setError(e.message); return; }
-        Alert.alert('✅ Compte créé !', 'Vérifie ton email pour confirmer.');
+        if (data.user) onLogin(data.user, name);
+        else Alert.alert('✅ Compte créé !', 'Vérifie ton email pour confirmer.');
       } else {
         const {data, error:e} = await supabase.auth.signInWithPassword({email, password});
         if (e) { setError(e.message); return; }
@@ -422,9 +425,9 @@ function FridgeScreen({items, setItems, user}) {
               <View style={[styles.urgBadge, {backgroundColor:urgBg(item.days)}]}>
                 <Text style={styles.urgText}>{urgLbl(item.days)}</Text>
               </View>
-              {item.nutri && (
+              {item.nutri_grade && (
                 <View style={{width:22,height:22,borderRadius:6,backgroundColor:'#34C759',alignItems:'center',justifyContent:'center'}}>
-                  <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri}</Text>
+                  <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri_grade}</Text>
                 </View>
               )}
             </View>
@@ -727,6 +730,26 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       </View>
     );
   }
+
+  if (mode === 'photo') return (
+    <SafeAreaView style={[styles.safe, {backgroundColor:C.bg}]}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
+        <Text style={styles.screenTitle}>Photo des courses</Text>
+        <TouchableOpacity onPress={() => setMode('choice')} style={styles.closeBtn}>
+          <Text style={{fontSize:18,color:C.t2}}>✕</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:32}}>
+        <Text style={{fontSize:56,marginBottom:20}}>📷</Text>
+        <Text style={{fontSize:20,fontWeight:'800',color:C.t1,marginBottom:10,textAlign:'center'}}>
+          Bientôt disponible
+        </Text>
+        <Text style={{fontSize:14,color:C.t3,textAlign:'center',lineHeight:22}}>
+          La reconnaissance automatique de plusieurs produits par photo arrive très prochainement.
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
 
   return null;
 }
