@@ -681,8 +681,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       <View style={{flex:1,backgroundColor:'#000'}}>
         <CameraView style={{flex:1}} facing="back"
           onBarcodeScanned={scanned ? undefined : handleBarcode}
-          barcodeScannerSettings={{barcodeTypes:['ean13','ean8','code128','qr']}}>
-          <SafeAreaView style={{flex:1}}>
+          barcodeScannerSettings={{barcodeTypes:['ean13','ean8','code128','qr']}}/>
+        <SafeAreaView style={{position:'absolute',top:0,left:0,right:0,bottom:0}}>
             <View style={{flexDirection:'row',justifyContent:'space-between',padding:20}}>
               <TouchableOpacity onPress={onClose} style={{backgroundColor:'rgba(0,0,0,0.5)',
                 width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center'}}>
@@ -706,7 +706,6 @@ function ScanScreen({onClose, setItems, user, familyId}) {
               <Text style={{color:'rgba(255,255,255,0.6)',fontSize:13}}>EAN-13 · EAN-8 · QR Code · Code128</Text>
             </View>
           </SafeAreaView>
-        </CameraView>
       </View>
     );
   }
