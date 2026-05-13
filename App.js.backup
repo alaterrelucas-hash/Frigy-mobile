@@ -4,10 +4,6 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── DESIGN SYSTEM ───────────────────────────────────────────────────────────
 const C = {
@@ -21,17 +17,21 @@ const C = {
 const urgBg = d => d<=1?'#FF3B30':d<=3?'#FF9500':'#FFB800';
 const urgLbl = d => d<=0?'J-1':`J-${d}`;
 
-// ─── SUPABASE ────────────────────────────────────────────────────────────────
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zd21yaWRwaWRocXFseG54aGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyODc2MjUsImV4cCI6MjA5Mzg2MzYyNX0.njAP240jTC1NEQ21NL1u6ubTWvczooWi-AVGiKmiKtA';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+const ANTHROPIC_KEY = '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';
+// ─── DEMO DATA ───────────────────────────────────────────────────────────────
+const DEMO_ITEMS = [
+  {id:'1',name:'Saumon fumé',emoji:'🐟',category:'Poisson',location:'Frigo',quantity:2,unit:'tranches',dlc:'14/05',days:1,nutri:'A',brand:'Monoprix'},
+  {id:'2',name:'Yaourt vanille',emoji:'🫙',category:'Laitier',location:'Frigo',quantity:4,unit:'pots',dlc:'16/05',days:2,nutri:'B',brand:'Danone'},
+  {id:'3',name:'Fraises',emoji:'🍓',category:'Fruits',location:'Frigo',quantity:500,unit:'g',dlc:'18/05',days:4,nutri:'A',brand:'Bio'},
+  {id:'4',name:'Lait entier',emoji:'🥛',category:'Laitier',location:'Frigo',quantity:1,unit:'L',dlc:'20/05',days:6,nutri:'B',brand:'Lactel'},
+  {id:'5',name:'Brocoli',emoji:'🥦',category:'Légumes',location:'Frigo',quantity:1,unit:'pièce',dlc:'22/05',days:8,nutri:'A',brand:''},
+  {id:'6',name:'Œufs fermier',emoji:'🥚',category:'Œufs',location:'Frigo',quantity:6,unit:'',dlc:'24/05',days:10,nutri:'A',brand:'Village Bio'},
+  {id:'7',name:'Poulet fermier',emoji:'🍗',category:'Viande',location:'Congélateur',quantity:1,unit:'kg',dlc:'15/07',days:69,nutri:'B',brand:'Fermier'},
+  {id:'8',name:'Pâtes rigatoni',emoji:'🍝',category:'Épicerie',location:'Placard',quantity:500,unit:'g',dlc:'01/03',days:298,nutri:'C',brand:'Barilla'},
+];
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function searchOpenFoodFacts(barcode) {
@@ -43,8 +43,8 @@ async function searchOpenFoodFacts(barcode) {
     return {
       name: p.product_name_fr || p.product_name || '',
       brand: p.brands || '',
-      nutri: ['A','B','C','D','E'].includes((p.nutriscore_grade||'').toUpperCase()) ? (p.nutriscore_grade||'').toUpperCase() : null,
-      kcal: p.nutriments?.['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null,
+      nutri: (p.nutriscore_grade || '').toUpperCase(),
+      kcal: p.nutriments?.['energy-kcal_100g'] || null,
       category: p.categories_tags?.[0]?.replace('en:','').replace(/-/g,' ') || '',
       imgUrl: p.image_front_small_url || p.image_small_url || p.image_url || p.image_front_url || null,
     };
@@ -54,106 +54,74 @@ async function searchOpenFoodFacts(barcode) {
 function estimateDays(category, name) {
   const n = (name||'').toLowerCase();
   const c = (category||'').toLowerCase();
+
+  // Viandes
   if (n.includes('poulet') || n.includes('volaille') || c.includes('poultry')) return 3;
   if (n.includes('viande') || n.includes('bœuf') || n.includes('boeuf') || n.includes('porc') || c.includes('meat')) return 3;
   if (n.includes('charcuterie') || n.includes('jambon') || n.includes('saucisse')) return 5;
+
+  // Poissons
   if (n.includes('poisson') || n.includes('saumon') || n.includes('thon') || c.includes('fish')) return 2;
   if (n.includes('crevette') || n.includes('fruits de mer')) return 2;
+
+  // Laitiers
   if (n.includes('lait') || c.includes('milk')) return 5;
   if (n.includes('yaourt') || n.includes('yogurt')) return 21;
   if (n.includes('crème') || n.includes('creme')) return 7;
   if (n.includes('beurre')) return 30;
   if (n.includes('fromage') || c.includes('cheese')) return 14;
+
+  // Œufs
   if (n.includes('œuf') || n.includes('oeuf') || c.includes('egg')) return 28;
+
+  // Fruits & légumes frais
   if (n.includes('fraise') || n.includes('framboise') || n.includes('myrtille')) return 4;
   if (n.includes('salade') || n.includes('épinard') || n.includes('roquette')) return 4;
   if (n.includes('avocat')) return 3;
   if (n.includes('tomate') || n.includes('concombre')) return 7;
   if (n.includes('pomme') || n.includes('poire') || n.includes('orange')) return 14;
   if (c.includes('fruit') || c.includes('vegetable')) return 7;
+
+  // Pain & viennoiserie
   if (n.includes('pain') || n.includes('baguette') || n.includes('croissant')) return 3;
   if (n.includes('brioche') || n.includes('viennoiserie')) return 5;
+
+  // Plats préparés & traiteur
   if (c.includes('prepared') || c.includes('traiteur') || c.includes('ready meal')) return 3;
+
+  // Boissons
   if (n.includes('jus') || c.includes('juice')) return 7;
   if (c.includes('beverage') || c.includes('boisson')) return 90;
+
+  // Surgelés
   if (n.includes('surgelé') || c.includes('frozen')) return 180;
+
+  // Épicerie sèche (pâtes, riz, conserves, etc.)
   if (c.includes('pasta') || c.includes('rice') || c.includes('cereal')) return 365;
   if (c.includes('canned') || c.includes('conserve')) return 730;
+
+  // Défaut épicerie
   return 90;
 }
-
-// ─── MAIN APP ────────────────────────────────────────────────────────────────
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('home');
-  const [items, setItems] = useState([]);
-  const [user, setUser] = useState(null);
-  const [familyId, setFamilyId] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({data:{session}}) => {
-      setUser(session?.user || null);
-      setAuthLoading(false);
-      if (session?.user) setupProfile(session.user.id);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) setupProfile(session.user.id);
-      else { setFamilyId(null); setItems([]); }
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  const setupProfile = async (userId, name = null) => {
-    await supabase.rpc('setup_user_profile');
-
-    const {data: profile} = await supabase
-      .from('profiles')
-      .select('id, family_id, name')
-      .eq('id', userId)
-      .single();
-
-    if (profile?.family_id) {
-      if (name && (!profile.name || profile.name === 'Utilisateur')) {
-        await supabase.from('profiles').update({name}).eq('id', userId);
-      }
-      setFamilyId(profile.family_id);
-      fetchItems(profile.family_id);
-    }
-  };
-
-  const fetchItems = async (famId) => {
-    const {data} = await supabase
-      .from('items')
-      .select('*')
-      .eq('family_id', famId)
-      .eq('consumed', false);
-    if (data) setItems(data.map(i => ({
-      ...i, days: i.days_left, emoji: i.emoji||'🛒'
-    })));
-  };
-
+  const [items, setItems] = useState(DEMO_ITEMS);
   const [scanOpen, setScanOpen] = useState(false);
+
   const expiring = items.filter(i => i.days <= 4).sort((a,b) => a.days - b.days);
-
-  if (authLoading) return (
-    <View style={{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:C.bg}}>
-      <ActivityIndicator color={C.green} size="large"/>
-    </View>
-  );
-
-  if (!user) return (
-    <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }}/>
-  );
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)}/>}
-      {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId}/>}
-      {tab === 'recipes' && <RecipesScreen items={items}/>}
-      {tab === 'profile' && <ProfileScreen/>}
+      
+      {/* SCREENS */}
+      {tab === 'home'   && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)}/>}
+      {tab === 'fridge' && <FridgeScreen items={items} setItems={setItems}/>}
+      {tab === 'recipes'&& <RecipesScreen items={items}/>}
+      {tab === 'profile'&& <ProfileScreen/>}
 
+      {/* TAB BAR */}
       <View style={styles.tabBar}>
         {[
           {id:'home',    label:'Accueil', icon:'🏠'},
@@ -183,109 +151,18 @@ export default function App() {
         })}
       </View>
 
+      {/* SCAN MODAL */}
       <Modal visible={scanOpen} animationType="slide">
-        <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} user={user} familyId={familyId}/>
+        <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems}/>
       </Modal>
     </SafeAreaView>
   );
 }
-
-// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
-const inputStyle = {
-  borderWidth:1, borderColor:C.border, borderRadius:12,
-  padding:13, fontSize:14, color:C.t1,
-  backgroundColor:'#FAFAFA', marginBottom:12,
-};
-
-function LoginScreen({onLogin}) {
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleAuth = async () => {
-    if (!email || !password) { setError('Remplis tous les champs'); return; }
-    setLoading(true); setError('');
-    try {
-      if (mode === 'signup') {
-        const {data, error:e} = await supabase.auth.signUp({email, password});
-        if (e) { setError(e.message); return; }
-        if (data.user) onLogin(data.user, name);
-        else Alert.alert('✅ Compte créé !', 'Vérifie ton email pour confirmer.');
-      } else {
-        const {data, error:e} = await supabase.auth.signInWithPassword({email, password});
-        if (e) { setError(e.message); return; }
-        onLogin(data.user);
-      }
-    } catch(e) { setError(e.message); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <SafeAreaView style={[styles.safe]}>
-      <ScrollView contentContainerStyle={{padding:24, flexGrow:1, justifyContent:'center'}}>
-        <View style={{alignItems:'center', marginBottom:36, marginTop:40}}>
-          <Text style={{fontSize:52}}>🥗</Text>
-          <Text style={{fontSize:28, fontWeight:'800', color:C.t1, marginTop:12}}>Frigy</Text>
-          <Text style={{fontSize:15, color:C.t3}}>{mode === 'login' ? 'Bon retour !' : 'Crée ton compte'}</Text>
-        </View>
-
-        {mode === 'signup' && (
-          <View style={{marginBottom:16}}>
-            <Text style={{fontSize:13, fontWeight:'600', color:C.t2, marginBottom:6}}>Ton prénom</Text>
-            <TextInput style={{backgroundColor:C.card, borderWidth:1.5, borderColor:C.border, borderRadius:12, padding:14, fontSize:15, color:C.t1}}
-              value={name} onChangeText={setName} placeholder="Lucas" placeholderTextColor={C.t4}/>
-          </View>
-        )}
-
-        <View style={{marginBottom:16}}>
-          <Text style={{fontSize:13, fontWeight:'600', color:C.t2, marginBottom:6}}>Email</Text>
-          <TextInput style={{backgroundColor:C.card, borderWidth:1.5, borderColor:C.border, borderRadius:12, padding:14, fontSize:15, color:C.t1}}
-            value={email} onChangeText={setEmail} placeholder="lucas@frigy.app"
-            placeholderTextColor={C.t4} keyboardType="email-address" autoCapitalize="none"/>
-        </View>
-
-        <View style={{marginBottom:16}}>
-          <Text style={{fontSize:13, fontWeight:'600', color:C.t2, marginBottom:6}}>Mot de passe</Text>
-          <TextInput style={{backgroundColor:C.card, borderWidth:1.5, borderColor:C.border, borderRadius:12, padding:14, fontSize:15, color:C.t1}}
-            value={password} onChangeText={setPassword} placeholder="••••••••"
-            placeholderTextColor={C.t4} secureTextEntry/>
-        </View>
-
-        {error !== '' && (
-          <View style={{padding:12, backgroundColor:'#FFF0F0', borderRadius:10, marginBottom:14}}>
-            <Text style={{color:C.red, fontSize:13}}>{error}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity style={{backgroundColor:C.green, padding:15, borderRadius:14, alignItems:'center'}}
-          onPress={handleAuth} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff"/> :
-            <Text style={{color:'#fff', fontWeight:'700', fontSize:15}}>
-              {mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
-            </Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={{marginTop:16, alignItems:'center'}}
-          onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); }}>
-          <Text style={{fontSize:14, color:C.t3}}>
-            {mode === 'login' ? 'Pas de compte ? ' : 'Déjà un compte ? '}
-            <Text style={{color:C.green, fontWeight:'700'}}>
-              {mode === 'login' ? 'Créer un compte' : 'Se connecter'}
-            </Text>
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
 // ─── HOME SCREEN ──────────────────────────────────────────────────────────────
 function HomeScreen({items, expiring, onNav, onScan}) {
   return (
     <ScrollView style={styles.screen} showsVerticalScrollIndicator={false}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerSub}>Bonjour Lucas 👋</Text>
@@ -296,6 +173,7 @@ function HomeScreen({items, expiring, onNav, onScan}) {
         </View>
       </View>
 
+      {/* Hero card */}
       <View style={styles.heroCard}>
         <View style={{flex:1}}>
           <Text style={styles.heroTitle}>
@@ -314,6 +192,7 @@ function HomeScreen({items, expiring, onNav, onScan}) {
         </View>
       </View>
 
+      {/* Stats */}
       <View style={{flexDirection:'row', gap:10, marginBottom:14}}>
         {[
           {label:'En stock', value:items.length, sub:'produits', col:C.green},
@@ -327,6 +206,7 @@ function HomeScreen({items, expiring, onNav, onScan}) {
         ))}
       </View>
 
+      {/* Priorités */}
       <Text style={styles.sectionTitle}>PRODUITS PRIORITAIRES</Text>
       <View style={styles.card}>
         {expiring.slice(0,4).map((item,i,arr) => (
@@ -343,6 +223,7 @@ function HomeScreen({items, expiring, onNav, onScan}) {
         ))}
       </View>
 
+      {/* Impact */}
       <Text style={[styles.sectionTitle, {marginTop:14}]}>IMPACT CE MOIS-CI</Text>
       <View style={styles.card}>
         <View style={{padding:16, flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
@@ -366,15 +247,16 @@ function HomeScreen({items, expiring, onNav, onScan}) {
           <Text style={{fontSize:64}}>🌍</Text>
         </View>
       </View>
+
       <View style={{height:20}}/>
     </ScrollView>
   );
 }
-
 // ─── FRIDGE SCREEN ────────────────────────────────────────────────────────────
-function FridgeScreen({items, setItems, user}) {
+function FridgeScreen({items, setItems}) {
   const [loc, setLoc] = useState('Frigo');
   const [q, setQ] = useState('');
+  
   const shown = items
     .filter(i => i.location === loc && (!q || i.name.toLowerCase().includes(q.toLowerCase())))
     .sort((a,b) => a.days - b.days);
@@ -383,6 +265,8 @@ function FridgeScreen({items, setItems, user}) {
     <View style={styles.screen}>
       <View style={{padding:16}}>
         <Text style={styles.screenTitle}>Mon Frigo</Text>
+        
+        {/* Location tabs */}
         <View style={{flexDirection:'row', gap:8, marginBottom:14}}>
           {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => {
             const cnt = items.filter(i => i.location === l.id).length;
@@ -397,12 +281,18 @@ function FridgeScreen({items, setItems, user}) {
             );
           })}
         </View>
+
+        {/* Search */}
         <View style={styles.searchBar}>
           <Text style={{fontSize:16,marginRight:8}}>🔍</Text>
-          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher…"
-            style={{flex:1,fontSize:14,color:C.t1}} placeholderTextColor={C.t4}/>
+          <TextInput
+            value={q} onChangeText={setQ}
+            placeholder="Rechercher…"
+            style={{flex:1,fontSize:14,color:C.t1}}
+            placeholderTextColor={C.t4}/>
         </View>
       </View>
+
       <ScrollView style={{flex:1, paddingHorizontal:16}}>
         {shown.length === 0 && (
           <View style={{alignItems:'center', paddingTop:60}}>
@@ -411,15 +301,13 @@ function FridgeScreen({items, setItems, user}) {
             <Text style={{fontSize:13,color:C.t3,marginTop:4}}>Scanne tes courses pour commencer</Text>
           </View>
         )}
-        {shown.map((item) => (
-          <TouchableOpacity key={item.id} style={[styles.fridgeRow, {marginBottom:9}]}
+        {shown.map((item,i) => (
+          <TouchableOpacity key={item.id}
+            style={[styles.fridgeRow, {marginBottom:9}]}
             onLongPress={() => {
               Alert.alert('Supprimer ?', `Retirer ${item.name} du frigo ?`, [
                 {text:'Annuler', style:'cancel'},
-                {text:'Supprimer', style:'destructive', onPress: async () => {
-                  setItems(p => p.filter(x => x.id !== item.id));
-                  await supabase.from('items').delete().eq('id', item.id);
-                }}
+                {text:'Supprimer', style:'destructive', onPress:() => setItems(p => p.filter(x => x.id !== item.id))}
               ]);
             }}>
             <Text style={{fontSize:36,marginRight:12}}>{item.emoji}</Text>
@@ -435,9 +323,9 @@ function FridgeScreen({items, setItems, user}) {
               <View style={[styles.urgBadge, {backgroundColor:urgBg(item.days)}]}>
                 <Text style={styles.urgText}>{urgLbl(item.days)}</Text>
               </View>
-              {item.nutri_grade && (
+              {item.nutri && (
                 <View style={{width:22,height:22,borderRadius:6,backgroundColor:'#34C759',alignItems:'center',justifyContent:'center'}}>
-                  <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri_grade}</Text>
+                  <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri}</Text>
                 </View>
               )}
             </View>
@@ -526,33 +414,16 @@ function ProfileScreen() {
           ))}
         </View>
       </View>
-
-      <TouchableOpacity
-        style={{margin:16,padding:15,borderRadius:14,alignItems:'center',borderWidth:1.5,borderColor:'#FF3B30'}}
-        onPress={async() => { await supabase.auth.signOut(); }}>
-        <Text style={{color:'#FF3B30',fontWeight:'700',fontSize:15}}>Se déconnecter</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
-
 // ─── SCAN SCREEN ──────────────────────────────────────────────────────────────
-const EDGE_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/analyze-photo';
-
-function ScanScreen({onClose, setItems, user, familyId}) {
+function ScanScreen({onClose, setItems}) {
   const [mode, setMode] = useState('choice');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [location, setLocation] = useState('Frigo');
-
-  // Photo mode
-  const [photoLoading, setPhotoLoading] = useState(false);
-  const [detectedProducts, setDetectedProducts] = useState(null);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [photoLocation, setPhotoLocation] = useState('Frigo');
-  const [saving, setSaving] = useState(false);
 
   const handleBarcode = async ({data}) => {
     if (scanned || loading) return;
@@ -562,10 +433,16 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       const off = await searchOpenFoodFacts(data);
       if (off && off.name) {
         setResult({
-          barcode: data, name: off.name, brand: off.brand,
-          nutri: off.nutri, kcal: off.kcal, emoji: '🛒',
+          barcode: data,
+          name: off.name,
+          brand: off.brand,
+          nutri: off.nutri,
+          kcal: off.kcal,
+          emoji: '🛒',
           days: estimateDays(off.category, off.name),
-          category: off.category, imgUrl: off.imgUrl, source: 'OpenFoodFacts',
+          category: off.category,
+          imgUrl: off.imgUrl,
+          source: 'OpenFoodFacts',
         });
       } else {
         setResult({barcode:data, name:'Produit inconnu', brand:'', emoji:'🛒', days:30, source:'Manuel'});
@@ -577,37 +454,26 @@ function ScanScreen({onClose, setItems, user, familyId}) {
     setLoading(false);
   };
 
-  const addProduct = async () => {
+  const addProduct = () => {
     if (!result) return;
-    const newItem = {
-      family_id: familyId,
-      added_by: user?.id,
+    setItems(p => [...p, {
+      id: Date.now().toString(),
       name: result.name,
       emoji: result.emoji || '🛒',
-      brand: result.brand || '',
       category: result.category || 'Épicerie',
-      location,
+      location: 'Frigo',
       quantity: 1,
       unit: '',
       dlc: '—',
-      days_left: result.days || 30,
-      nutri_grade: result.nutri || null,
-      kcal: result.kcal || null,
-      img_url: result.imgUrl || null,
-      barcode: result.barcode || null,
-      consumed: false,
-    };
-    const {data, error} = await supabase.from('items').insert(newItem).select().single();
-    if (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder le produit.');
-      return;
-    }
-    setItems(p => [...p, {...data, days: data.days_left}]);
-    const locLabel = location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard';
-    Alert.alert('✅ Ajouté !', `${result.name} rangé dans ${locLabel}.`);
+      days: result.days || 30,
+      nutri: result.nutri || 'B',
+      brand: result.brand || '',imgUrl: result.imgUrl || null,
+    }]);
+    Alert.alert('✅ Ajouté !', `${result.name} rangé dans ton frigo.`);
     onClose();
   };
 
+  // CHOICE
   if (mode === 'choice') return (
     <SafeAreaView style={[styles.safe, {backgroundColor:C.bg}]}>
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
@@ -623,13 +489,14 @@ function ScanScreen({onClose, setItems, user, familyId}) {
         ].map(m => (
           <TouchableOpacity key={m.id} onPress={() => {
             if (m.id === 'barcode') {
-              if (!permission?.granted) requestPermission();
+              if (!permission?.granted) { requestPermission(); }
               setMode('scanner');
             } else {
               setMode('photo');
             }
           }} style={[styles.card, {marginBottom:12,padding:18,flexDirection:'row',gap:14,alignItems:'center'}]}>
-            <View style={{width:52,height:52,borderRadius:15,backgroundColor:`${m.col}15`,alignItems:'center',justifyContent:'center'}}>
+            <View style={{width:52,height:52,borderRadius:15,backgroundColor:`${m.col}15`,
+              alignItems:'center',justifyContent:'center'}}>
               <Text style={{fontSize:24}}>{m.e}</Text>
             </View>
             <View style={{flex:1}}>
@@ -647,6 +514,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
     </SafeAreaView>
   );
 
+  // SCANNER CODE-BARRES NATIF
   if (mode === 'scanner') {
     if (!permission?.granted) return (
       <SafeAreaView style={[styles.safe,{alignItems:'center',justifyContent:'center',padding:30}]}>
@@ -667,9 +535,11 @@ function ScanScreen({onClose, setItems, user, familyId}) {
         <ScrollView style={{padding:16}}>
           <View style={[styles.card, {padding:20,alignItems:'center',marginBottom:16}]}>
             {result.imgUrl
-              ? <Image source={{uri:result.imgUrl}} style={{width:120,height:120,borderRadius:16,marginBottom:12}} resizeMode="contain"/>
-              : <Text style={{fontSize:60,marginBottom:12}}>{result.emoji}</Text>
-            }
+  ? <Image source={{uri:result.imgUrl}} 
+      style={{width:120,height:120,borderRadius:16,marginBottom:12}}
+      resizeMode="contain"/>
+  : <Text style={{fontSize:60,marginBottom:12}}>{result.emoji}</Text>
+}
             <Text style={{fontSize:20,fontWeight:'700',color:C.t1,marginBottom:4,textAlign:'center'}}>{result.name}</Text>
             {result.brand && <Text style={{fontSize:14,color:C.t3,marginBottom:8}}>{result.brand}</Text>}
             <View style={{flexDirection:'row',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
@@ -690,24 +560,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
               )}
             </View>
           </View>
-          <View style={[styles.card, {padding:16, marginBottom:12}]}>
-            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>OÙ LE RANGER ?</Text>
-            <View style={{flexDirection:'row',gap:8}}>
-              {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
-                <TouchableOpacity key={l.id} onPress={() => setLocation(l.id)}
-                  style={{flex:1,alignItems:'center',padding:10,borderRadius:12,
-                    borderWidth:1.5,
-                    borderColor: location===l.id ? C.green : C.border,
-                    backgroundColor: location===l.id ? `${C.green}12` : C.card}}>
-                  <Text style={{fontSize:22,marginBottom:4}}>{l.icon}</Text>
-                  <Text style={{fontSize:11,fontWeight:'600',
-                    color: location===l.id ? C.green : C.t3}}>{l.id}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
           <TouchableOpacity style={styles.greenBtn} onPress={addProduct}>
-            <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>✅ Ranger dans {location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard'}</Text>
+            <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>✅ Ranger dans mon frigo</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.greenBtn, {backgroundColor:'transparent',marginTop:10}]}
             onPress={() => {setResult(null); setScanned(false);}}>
@@ -721,8 +575,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       <View style={{flex:1,backgroundColor:'#000'}}>
         <CameraView style={{flex:1}} facing="back"
           onBarcodeScanned={scanned ? undefined : handleBarcode}
-          barcodeScannerSettings={{barcodeTypes:['ean13','ean8','code128','qr']}}/>
-        <SafeAreaView style={{position:'absolute',top:0,left:0,right:0,bottom:0}}>
+          barcodeScannerSettings={{barcodeTypes:['ean13','ean8','code128','qr']}}>
+          <SafeAreaView style={{flex:1}}>
             <View style={{flexDirection:'row',justifyContent:'space-between',padding:20}}>
               <TouchableOpacity onPress={onClose} style={{backgroundColor:'rgba(0,0,0,0.5)',
                 width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center'}}>
@@ -743,171 +597,13 @@ function ScanScreen({onClose, setItems, user, familyId}) {
               )}
             </View>
             <View style={{padding:20,alignItems:'center'}}>
-              <Text style={{color:'rgba(255,255,255,0.6)',fontSize:13}}>EAN-13 · EAN-8 · QR Code · Code128</Text>
+              <Text style={{color:'rgba(255,255,255,0.6)',fontSize:13}}>
+                EAN-13 · EAN-8 · QR Code · Code128
+              </Text>
             </View>
           </SafeAreaView>
+        </CameraView>
       </View>
-    );
-  }
-
-  const launchPhoto = async (fromCamera) => {
-    setPhotoLoading(true);
-    try {
-      const picked = fromCamera
-        ? await ImagePicker.launchCameraAsync({quality:0.7, allowsEditing:false})
-        : await ImagePicker.launchImageLibraryAsync({quality:0.7, mediaTypes:['images']});
-
-      if (picked.canceled) { setPhotoLoading(false); return; }
-
-      const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const res = await fetch(EDGE_FN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({imageBase64: base64, mimeType: 'image/jpeg'}),
-      });
-      const {products} = await res.json();
-      const withIds = (products||[]).map((p,i) => ({...p, _id: i.toString()}));
-      setDetectedProducts(withIds);
-      setSelectedIds(withIds.map(p => p._id));
-    } catch(e) {
-      Alert.alert('Erreur', 'Impossible d\'analyser la photo.');
-    }
-    setPhotoLoading(false);
-  };
-
-  const savePhotoProducts = async () => {
-    const toSave = (detectedProducts||[]).filter(p => selectedIds.includes(p._id));
-    if (!toSave.length) return;
-    setSaving(true);
-    const rows = toSave.map(p => ({
-      family_id: familyId,
-      added_by: user?.id,
-      name: p.name,
-      emoji: p.emoji || '🛒',
-      brand: p.brand || '',
-      category: p.category || 'Épicerie',
-      location: photoLocation,
-      quantity: 1,
-      unit: '',
-      dlc: p.dlc || '—',
-      days_left: p.days_left || 30,
-      nutri_grade: null,
-      consumed: false,
-    }));
-    const {data, error} = await supabase.from('items').insert(rows).select();
-    if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setSaving(false); return; }
-    setItems(prev => [...prev, ...(data||[]).map(i => ({...i, days: i.days_left}))]);
-    Alert.alert('✅ Ajouté !', `${rows.length} produit${rows.length>1?'s':''} rangé${rows.length>1?'s':''} dans ${photoLocation === 'Frigo' ? 'le frigo' : photoLocation === 'Congélateur' ? 'le congélateur' : 'le placard'}.`);
-    setSaving(false);
-    onClose();
-  };
-
-  if (mode === 'photo') {
-    if (photoLoading) return (
-      <SafeAreaView style={[styles.safe,{alignItems:'center',justifyContent:'center'}]}>
-        <ActivityIndicator color={C.green} size="large"/>
-        <Text style={{marginTop:16,fontSize:15,fontWeight:'600',color:C.t2}}>Claude analyse ta photo…</Text>
-        <Text style={{marginTop:6,fontSize:13,color:C.t3}}>Ça prend 5 à 10 secondes</Text>
-      </SafeAreaView>
-    );
-
-    if (detectedProducts) return (
-      <SafeAreaView style={[styles.safe,{backgroundColor:C.bg}]}>
-        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
-          <Text style={styles.screenTitle}>{detectedProducts.length} produit{detectedProducts.length>1?'s':''} détecté{detectedProducts.length>1?'s':''}</Text>
-          <TouchableOpacity onPress={() => setDetectedProducts(null)} style={styles.closeBtn}>
-            <Text style={{fontSize:18,color:C.t2}}>✕</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={{flex:1,paddingHorizontal:16}}>
-          {detectedProducts.map(p => {
-            const sel = selectedIds.includes(p._id);
-            return (
-              <TouchableOpacity key={p._id} onPress={() => setSelectedIds(prev =>
-                sel ? prev.filter(x => x !== p._id) : [...prev, p._id]
-              )} style={[styles.fridgeRow,{marginBottom:8,opacity:sel?1:0.4}]}>
-                <Text style={{fontSize:32,marginRight:12}}>{p.emoji}</Text>
-                <View style={{flex:1}}>
-                  <Text style={styles.productName}>{p.name}</Text>
-                  {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
-                  {p.dlc && <Text style={{fontSize:11,color:C.green,fontWeight:'600',marginTop:2}}>DLC {p.dlc}</Text>}
-                </View>
-                <View style={{width:24,height:24,borderRadius:6,borderWidth:2,
-                  borderColor: sel ? C.green : C.t4,
-                  backgroundColor: sel ? C.green : 'transparent',
-                  alignItems:'center',justifyContent:'center'}}>
-                  {sel && <Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          <View style={[styles.card,{padding:16,marginTop:4,marginBottom:12}]}>
-            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>OÙ LES RANGER ?</Text>
-            <View style={{flexDirection:'row',gap:8}}>
-              {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
-                <TouchableOpacity key={l.id} onPress={() => setPhotoLocation(l.id)}
-                  style={{flex:1,alignItems:'center',padding:10,borderRadius:12,borderWidth:1.5,
-                    borderColor: photoLocation===l.id ? C.green : C.border,
-                    backgroundColor: photoLocation===l.id ? `${C.green}12` : C.card}}>
-                  <Text style={{fontSize:20,marginBottom:3}}>{l.icon}</Text>
-                  <Text style={{fontSize:10,fontWeight:'600',color: photoLocation===l.id ? C.green : C.t3}}>{l.id}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity style={[styles.greenBtn,{marginBottom:10}]} onPress={savePhotoProducts} disabled={saving||selectedIds.length===0}>
-            {saving ? <ActivityIndicator color="#fff"/> :
-              <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>
-                ✅ Ranger {selectedIds.length} produit{selectedIds.length>1?'s':''}
-              </Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.greenBtn,{backgroundColor:'transparent',marginBottom:20}]} onPress={() => setDetectedProducts(null)}>
-            <Text style={{color:C.green,fontWeight:'700',fontSize:15}}>← Reprendre une photo</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-
-    return (
-      <SafeAreaView style={[styles.safe,{backgroundColor:C.bg}]}>
-        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
-          <Text style={styles.screenTitle}>Photo des courses</Text>
-          <TouchableOpacity onPress={() => setMode('choice')} style={styles.closeBtn}>
-            <Text style={{fontSize:18,color:C.t2}}>✕</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{flex:1,padding:16,gap:12}}>
-          <TouchableOpacity onPress={() => launchPhoto(true)}
-            style={[styles.card,{padding:22,flexDirection:'row',gap:14,alignItems:'center'}]}>
-            <Text style={{fontSize:36}}>📸</Text>
-            <View style={{flex:1}}>
-              <Text style={{fontSize:16,fontWeight:'700',color:C.t1,marginBottom:3}}>Prendre une photo</Text>
-              <Text style={{fontSize:13,color:C.t3}}>Pose tes courses sur une table et photographie-les</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => launchPhoto(false)}
-            style={[styles.card,{padding:22,flexDirection:'row',gap:14,alignItems:'center'}]}>
-            <Text style={{fontSize:36}}>🖼️</Text>
-            <View style={{flex:1}}>
-              <Text style={{fontSize:16,fontWeight:'700',color:C.t1,marginBottom:3}}>Depuis la galerie</Text>
-              <Text style={{fontSize:13,color:C.t3}}>Choisis une photo déjà prise</Text>
-            </View>
-          </TouchableOpacity>
-          <View style={{marginTop:8,padding:14,backgroundColor:`${C.green}12`,borderRadius:14}}>
-            <Text style={{fontSize:12,color:'#27AE60',lineHeight:18}}>
-              💡 Claude IA reconnaît tous les produits visibles et lit les dates de péremption automatiquement
-            </Text>
-          </View>
-        </View>
-      </SafeAreaView>
     );
   }
 
