@@ -95,6 +95,9 @@ export default function App() {
   }, []);
 
   const setupProfile = async (userId) => {
+    // Crée famille + profil si besoin (fonction SECURITY DEFINER, contourne RLS)
+    await supabase.rpc('setup_user_profile');
+
     const {data: profile} = await supabase
       .from('profiles')
       .select('id, family_id, name')
@@ -104,23 +107,7 @@ export default function App() {
     if (profile?.family_id) {
       setFamilyId(profile.family_id);
       fetchItems(profile.family_id);
-      return;
     }
-
-    // Nouveau compte : créer famille + profil
-    const {data: family} = await supabase
-      .from('families')
-      .insert({created_by: userId})
-      .select()
-      .single();
-
-    await supabase.from('profiles').insert({
-      id: userId,
-      family_id: family.id,
-    });
-
-    setFamilyId(family.id);
-    fetchItems(family.id);
   };
 
   const fetchItems = async (famId) => {
