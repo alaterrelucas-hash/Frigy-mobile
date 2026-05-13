@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── DESIGN SYSTEM ───────────────────────────────────────────────────────────
 const C = {
@@ -21,7 +22,14 @@ const urgLbl = d => d<=0?'J-1':`J-${d}`;
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zd21yaWRwaWRocXFseG54aGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyODc2MjUsImV4cCI6MjA5Mzg2MzYyNX0.njAP240jTC1NEQ21NL1u6ubTWvczooWi-AVGiKmiKtA';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function searchOpenFoodFacts(barcode) {
