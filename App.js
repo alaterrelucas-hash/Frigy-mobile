@@ -581,7 +581,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       return;
     }
     setItems(p => [...p, {...data, days: data.days_left}]);
-    Alert.alert('✅ Ajouté !', `${result.name} rangé dans ton frigo.`);
+    const locLabel = location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard';
+    Alert.alert('✅ Ajouté !', `${result.name} rangé dans ${locLabel}.`);
     onClose();
   };
 
