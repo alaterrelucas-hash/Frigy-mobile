@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "frigy-mobile",
+    "name": "Frigy",
     "slug": "frigy-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,22 +8,39 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F0F2F5"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.frigy.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#F0F2F5"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.frigy.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-camera"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f8e07325-05c9-44c1-a029-4a21db4c3fb0"
+      }
     }
   }
 }
