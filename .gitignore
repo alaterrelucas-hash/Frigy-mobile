@@ -33,6 +33,13 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Supabase temp
+supabase/.temp/
+
+# Backup files
+*.backup
+LoginScreen.js
+
 # typescript
 *.tsbuildinfo
 

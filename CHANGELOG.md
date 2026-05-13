@@ -1,5 +1,22 @@
 # Changelog — Frigy
 
+## [1.0.3] — 2026-05-13
+
+### Ajouté
+- **Photo des courses** : reconnaissance automatique multi-produits via Claude Vision (Haiku)
+  - Photo depuis caméra ou galerie
+  - Détection des produits, marques, catégories et DLC visibles
+  - Écran de confirmation avec checkboxes + sélecteur Frigo/Congélateur/Placard
+  - Sauvegarde en batch dans Supabase
+  - Clé Anthropic stockée en secret Supabase Edge Function (jamais dans l'app)
+- **Session persistante** : AsyncStorage — plus besoin de se reconnecter à chaque lancement
+
+### Corrigé
+- `nutri_grade` enfin affiché dans le frigo (était `nutri` dans le code)
+- `kcal` arrondi en integer pour respecter la contrainte DB
+- Prénom saisi au signup maintenant sauvegardé dans `profiles.name`
+- Mode "Photo des courses" ne créait plus de dead end blanc
+
 ## [1.0.2] — 2026-05-13
 
 ### Corrigé

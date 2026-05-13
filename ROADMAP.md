@@ -2,7 +2,10 @@
 
 ## 🚀 Lancement v1.0 (en cours)
 - [x] Build EAS soumis sur App Store Connect
+- [x] Session persistante (AsyncStorage)
+- [x] Photo des courses avec Claude Vision
 - [ ] Finaliser la fiche App Store Connect → cliquer "Ajouter pour vérification"
+- [ ] Build TestFlight v1.0.3 avec photo des courses
 - [ ] Validation Apple
 
 ---
