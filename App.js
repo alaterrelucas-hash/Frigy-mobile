@@ -530,6 +530,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [location, setLocation] = useState('Frigo');
 
   const handleBarcode = async ({data}) => {
     if (scanned || loading) return;
@@ -563,7 +564,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       emoji: result.emoji || '🛒',
       brand: result.brand || '',
       category: result.category || 'Épicerie',
-      location: 'Frigo',
+      location,
       quantity: 1,
       unit: '',
       dlc: '—',
@@ -666,8 +667,24 @@ function ScanScreen({onClose, setItems, user, familyId}) {
               )}
             </View>
           </View>
+          <View style={[styles.card, {padding:16, marginBottom:12}]}>
+            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>OÙ LE RANGER ?</Text>
+            <View style={{flexDirection:'row',gap:8}}>
+              {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
+                <TouchableOpacity key={l.id} onPress={() => setLocation(l.id)}
+                  style={{flex:1,alignItems:'center',padding:10,borderRadius:12,
+                    borderWidth:1.5,
+                    borderColor: location===l.id ? C.green : C.border,
+                    backgroundColor: location===l.id ? `${C.green}12` : C.card}}>
+                  <Text style={{fontSize:22,marginBottom:4}}>{l.icon}</Text>
+                  <Text style={{fontSize:11,fontWeight:'600',
+                    color: location===l.id ? C.green : C.t3}}>{l.id}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
           <TouchableOpacity style={styles.greenBtn} onPress={addProduct}>
-            <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>✅ Ranger dans mon frigo</Text>
+            <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>✅ Ranger dans {location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.greenBtn, {backgroundColor:'transparent',marginTop:10}]}
             onPress={() => {setResult(null); setScanned(false);}}>
