@@ -51,6 +51,18 @@ async function searchOpenFoodFacts(barcode) {
   } catch { return null; }
 }
 
+function suggestLocation(category, name) {
+  const c = (category||'').toLowerCase();
+  const n = (name||'').toLowerCase();
+  if (c === 'surgelé' || n.includes('surgelé') || n.includes('glacé')) return 'Congélateur';
+  if (['laitage','viande','poisson','fruit','légume'].includes(c)) return 'Frigo';
+  if (n.includes('lait') || n.includes('yaourt') || n.includes('fromage') ||
+      n.includes('crème') || n.includes('beurre') || n.includes('viande') ||
+      n.includes('poulet') || n.includes('saumon') || n.includes('jambon')) return 'Frigo';
+  if (n.includes('surgelé') || n.includes('glace') || n.includes('congelé')) return 'Congélateur';
+  return 'Placard';
+}
+
 function estimateDays(category, name) {
   const n = (name||'').toLowerCase();
   const c = (category||'').toLowerCase();
@@ -772,7 +784,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
         body: JSON.stringify({imageBase64: base64, mimeType: 'image/jpeg'}),
       });
       const {products} = await res.json();
-      const withIds = (products||[]).map((p,i) => ({...p, _id: i.toString(), location: 'Frigo'}));
+      const withIds = (products||[]).map((p,i) => ({...p, _id: i.toString(), location: suggestLocation(p.category, p.name)}));
       setDetectedProducts(withIds);
       setSelectedIds(withIds.map(p => p._id));
     } catch(e) {
@@ -855,16 +867,22 @@ function ScanScreen({onClose, setItems, user, familyId}) {
                 </View>
                 {sel && (
                   <View style={{flexDirection:'row',gap:6}}>
-                    {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
-                      <TouchableOpacity key={l.id} onPress={() => updateProductLocation(p._id, l.id)}
-                        style={{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',
-                          gap:4,paddingVertical:6,borderRadius:8,borderWidth:1.5,
-                          borderColor: p.location===l.id ? C.green : C.border,
-                          backgroundColor: p.location===l.id ? `${C.green}12` : '#FAFAFA'}}>
-                        <Text style={{fontSize:14}}>{l.icon}</Text>
-                        <Text style={{fontSize:10,fontWeight:'600',color: p.location===l.id ? C.green : C.t3}}>{l.id}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => {
+                      const suggested = suggestLocation(p.category, p.name) === l.id;
+                      const active = p.location === l.id;
+                      return (
+                        <TouchableOpacity key={l.id} onPress={() => updateProductLocation(p._id, l.id)}
+                          style={{flex:1,alignItems:'center',paddingVertical:6,borderRadius:8,borderWidth:1.5,
+                            borderColor: active ? C.green : C.border,
+                            backgroundColor: active ? `${C.green}12` : '#FAFAFA'}}>
+                          <Text style={{fontSize:16}}>{l.icon}</Text>
+                          <Text style={{fontSize:9,fontWeight:'600',color: active ? C.green : C.t3,marginTop:1}}>{l.id}</Text>
+                          {suggested && !active && (
+                            <Text style={{fontSize:8,color:C.yellow,fontWeight:'700',marginTop:1}}>suggéré</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 )}
               </View>
