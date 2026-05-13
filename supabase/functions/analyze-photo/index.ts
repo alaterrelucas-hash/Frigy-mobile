@@ -22,7 +22,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: [{
           role: 'user',
           content: [
@@ -36,17 +36,24 @@ serve(async (req) => {
             },
             {
               type: 'text',
-              text: `Analyse cette photo et identifie tous les produits alimentaires visibles.
-Pour chaque produit retourne un objet JSON avec ces champs :
-- name: nom du produit en français (string)
-- brand: marque si visible, sinon null
-- category: catégorie parmi: boisson, laitage, viande, poisson, fruit, légume, épicerie, surgelé, pain, café, autre
-- dlc: date de péremption si visible au format "YYYY-MM-DD", sinon null
-- emoji: un emoji qui représente ce produit
-- days_left: durée de conservation estimée en jours depuis aujourd'hui (entier)
+              text: `Tu es un expert en reconnaissance de produits alimentaires français.
+Analyse cette photo et liste UNIQUEMENT les produits alimentaires que tu identifies avec certitude.
 
-Réponds UNIQUEMENT avec un JSON array valide, sans texte ni markdown autour. Exemple:
-[{"name":"Lait demi-écrémé","brand":"Lactel","category":"laitage","dlc":null,"emoji":"🥛","days_left":7}]`,
+Règles strictes :
+- Lis le nom EXACT écrit sur l'emballage, ne devine pas
+- Si le texte est illisible ou le produit incertain, ne l'inclus pas
+- Lis la date de péremption si elle est clairement visible sur l'emballage
+- Pour les fruits et légumes sans emballage : nom générique suffit
+
+Pour chaque produit clairement identifiable, retourne :
+- name: nom exact lu sur l'emballage en français
+- brand: marque lue sur l'emballage, null si non visible
+- category: une parmi: boisson, laitage, viande, poisson, fruit, légume, épicerie, surgelé, pain, café, autre
+- dlc: date de péremption au format "YYYY-MM-DD" ou "YYYY-MM" si lisible sur l'emballage, sinon null
+- emoji: emoji le plus représentatif du produit
+- days_left: durée de conservation typique en jours (exemples: lait ouvert=5, yaourt=21, fromage=14, viande crue=3, poisson=2, pain=3, pâtes=365, café=365, boisson gazeuse=90, jus=7, conserve=730)
+
+Réponds UNIQUEMENT avec un JSON array valide, sans markdown ni texte autour. Si rien d'identifiable avec certitude : []`,
             },
           ],
         }],

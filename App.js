@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -760,7 +760,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       if (picked.canceled) { setPhotoLoading(false); return; }
 
       const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
       const res = await fetch(EDGE_FN_URL, {
