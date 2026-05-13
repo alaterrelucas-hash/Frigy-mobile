@@ -33,7 +33,7 @@ async function searchOpenFoodFacts(barcode) {
     return {
       name: p.product_name_fr || p.product_name || '',
       brand: p.brands || '',
-      nutri: (p.nutriscore_grade || '').toUpperCase(),
+      nutri: ['A','B','C','D','E'].includes((p.nutriscore_grade||'').toUpperCase()) ? (p.nutriscore_grade||'').toUpperCase() : null,
       kcal: p.nutriments?.['energy-kcal_100g'] || null,
       category: p.categories_tags?.[0]?.replace('en:','').replace(/-/g,' ') || '',
       imgUrl: p.image_front_small_url || p.image_small_url || p.image_url || p.image_front_url || null,
