@@ -131,7 +131,7 @@ export default function App() {
   );
 
   if (!user) return (
-    <LoginScreen onLogin={(u) => { setUser(u); fetchItems(u.id); }}/>
+    <LoginScreen onLogin={(u) => { setUser(u); setupProfile(u.id); }}/>
   );
 
   return (
