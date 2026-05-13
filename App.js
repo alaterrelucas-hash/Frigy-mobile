@@ -772,13 +772,17 @@ function ScanScreen({onClose, setItems, user, familyId}) {
         body: JSON.stringify({imageBase64: base64, mimeType: 'image/jpeg'}),
       });
       const {products} = await res.json();
-      const withIds = (products||[]).map((p,i) => ({...p, _id: i.toString()}));
+      const withIds = (products||[]).map((p,i) => ({...p, _id: i.toString(), location: 'Frigo'}));
       setDetectedProducts(withIds);
       setSelectedIds(withIds.map(p => p._id));
     } catch(e) {
       Alert.alert('Erreur', 'Impossible d\'analyser la photo.');
     }
     setPhotoLoading(false);
+  };
+
+  const updateProductLocation = (id, loc) => {
+    setDetectedProducts(prev => prev.map(p => p._id === id ? {...p, location: loc} : p));
   };
 
   const savePhotoProducts = async () => {
@@ -792,7 +796,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       emoji: p.emoji || '🛒',
       brand: p.brand || '',
       category: p.category || 'Épicerie',
-      location: photoLocation,
+      location: p.location || 'Frigo',
       quantity: 1,
       unit: '',
       dlc: p.dlc || '—',
@@ -803,9 +807,10 @@ function ScanScreen({onClose, setItems, user, familyId}) {
     const {data, error} = await supabase.from('items').insert(rows).select();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setSaving(false); return; }
     setItems(prev => [...prev, ...(data||[]).map(i => ({...i, days: i.days_left}))]);
-    Alert.alert('✅ Ajouté !', `${rows.length} produit${rows.length>1?'s':''} rangé${rows.length>1?'s':''} dans ${photoLocation === 'Frigo' ? 'le frigo' : photoLocation === 'Congélateur' ? 'le congélateur' : 'le placard'}.`);
+    Alert.alert('✅ Ajouté !', `${rows.length} produit${rows.length>1?'s':''} rangé${rows.length>1?'s':''}.`);
     setSaving(false);
-    onClose();
+    setDetectedProducts(null);
+    setSelectedIds([]);
   };
 
   if (mode === 'photo') {
@@ -829,41 +834,44 @@ function ScanScreen({onClose, setItems, user, familyId}) {
           {detectedProducts.map(p => {
             const sel = selectedIds.includes(p._id);
             return (
-              <TouchableOpacity key={p._id} onPress={() => setSelectedIds(prev =>
-                sel ? prev.filter(x => x !== p._id) : [...prev, p._id]
-              )} style={[styles.fridgeRow,{marginBottom:8,opacity:sel?1:0.4}]}>
-                <Text style={{fontSize:32,marginRight:12}}>{p.emoji}</Text>
-                <View style={{flex:1}}>
-                  <Text style={styles.productName}>{p.name}</Text>
-                  {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
-                  {p.dlc && <Text style={{fontSize:11,color:C.green,fontWeight:'600',marginTop:2}}>DLC {p.dlc}</Text>}
+              <View key={p._id} style={[styles.card,{marginBottom:8,padding:12,opacity:sel?1:0.45}]}>
+                <View style={{flexDirection:'row',alignItems:'center',marginBottom: sel ? 10 : 0}}>
+                  <TouchableOpacity onPress={() => setSelectedIds(prev =>
+                    sel ? prev.filter(x => x !== p._id) : [...prev, p._id]
+                  )} style={{marginRight:10}}>
+                    <View style={{width:24,height:24,borderRadius:6,borderWidth:2,
+                      borderColor: sel ? C.green : C.t4,
+                      backgroundColor: sel ? C.green : 'transparent',
+                      alignItems:'center',justifyContent:'center'}}>
+                      {sel && <Text style={{color:'#fff',fontSize:13,fontWeight:'800'}}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={{fontSize:28,marginRight:10}}>{p.emoji}</Text>
+                  <View style={{flex:1}}>
+                    <Text style={styles.productName}>{p.name}</Text>
+                    {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
+                    {p.dlc && <Text style={{fontSize:11,color:C.green,fontWeight:'600'}}>DLC {p.dlc}</Text>}
+                  </View>
                 </View>
-                <View style={{width:24,height:24,borderRadius:6,borderWidth:2,
-                  borderColor: sel ? C.green : C.t4,
-                  backgroundColor: sel ? C.green : 'transparent',
-                  alignItems:'center',justifyContent:'center'}}>
-                  {sel && <Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
-                </View>
-              </TouchableOpacity>
+                {sel && (
+                  <View style={{flexDirection:'row',gap:6}}>
+                    {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
+                      <TouchableOpacity key={l.id} onPress={() => updateProductLocation(p._id, l.id)}
+                        style={{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',
+                          gap:4,paddingVertical:6,borderRadius:8,borderWidth:1.5,
+                          borderColor: p.location===l.id ? C.green : C.border,
+                          backgroundColor: p.location===l.id ? `${C.green}12` : '#FAFAFA'}}>
+                        <Text style={{fontSize:14}}>{l.icon}</Text>
+                        <Text style={{fontSize:10,fontWeight:'600',color: p.location===l.id ? C.green : C.t3}}>{l.id}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
             );
           })}
 
-          <View style={[styles.card,{padding:16,marginTop:4,marginBottom:12}]}>
-            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>OÙ LES RANGER ?</Text>
-            <View style={{flexDirection:'row',gap:8}}>
-              {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
-                <TouchableOpacity key={l.id} onPress={() => setPhotoLocation(l.id)}
-                  style={{flex:1,alignItems:'center',padding:10,borderRadius:12,borderWidth:1.5,
-                    borderColor: photoLocation===l.id ? C.green : C.border,
-                    backgroundColor: photoLocation===l.id ? `${C.green}12` : C.card}}>
-                  <Text style={{fontSize:20,marginBottom:3}}>{l.icon}</Text>
-                  <Text style={{fontSize:10,fontWeight:'600',color: photoLocation===l.id ? C.green : C.t3}}>{l.id}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity style={[styles.greenBtn,{marginBottom:10}]} onPress={savePhotoProducts} disabled={saving||selectedIds.length===0}>
+          <TouchableOpacity style={[styles.greenBtn,{marginTop:4,marginBottom:10}]} onPress={savePhotoProducts} disabled={saving||selectedIds.length===0}>
             {saving ? <ActivityIndicator color="#fff"/> :
               <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>
                 ✅ Ranger {selectedIds.length} produit{selectedIds.length>1?'s':''}
