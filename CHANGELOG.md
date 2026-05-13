@@ -1,5 +1,14 @@
 # Changelog — Frigy
 
+## [1.0.2] — 2026-05-13
+
+### Corrigé
+- **Architecture Supabase** : la RLS policy `items_family` exige un `family_id` lié à un profil. Les inserts et lectures ne fonctionnaient pas du tout sans ça.
+- **setupProfile** : au premier login, création automatique d'une famille + profil dans Supabase. Les logins suivants récupèrent le `family_id` existant.
+- **fetchItems** : filtre maintenant par `family_id` (au lieu de `added_by`) — conforme à la RLS policy.
+- **addProduct** : `family_id` ajouté à l'insert. Champs corrigés : `nutri_grade` (était `nutri`), `img_url`, `kcal` maintenant envoyés.
+- **Props** : `familyId` transmis à `ScanScreen` et `FridgeScreen`.
+
 ## [1.0.1] — 2026-05-13
 
 ### Corrigé

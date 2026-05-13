@@ -8,9 +8,13 @@
 ---
 
 ## 🔧 Correctifs prioritaires (v1.0.x)
+- [x] Setup auto famille+profil au premier login (RLS `items_family` l'exige)
+- [x] `family_id` dans tous les inserts/lectures d'items
+- [x] Champs corrects : `nutri_grade`, `img_url`, `kcal`
 - [ ] Migrer les clés Supabase vers `expo-constants` / variables d'env (actuellement hardcodées dans App.js)
-- [ ] FridgeScreen : delete Supabase marque `consumed: true` plutôt que suppression physique (pour stats futures)
+- [ ] FridgeScreen : delete marque `consumed: true` plutôt que suppression physique (pour stats futures)
 - [ ] Gérer le cas `user` null dans ScanScreen si session expirée
+- [ ] Afficher le vrai prénom depuis `profiles.name` (hardcodé "Lucas" partout)
 
 ---
 

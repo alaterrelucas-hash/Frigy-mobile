@@ -77,26 +77,57 @@ export default function App() {
   const [tab, setTab] = useState('home');
   const [items, setItems] = useState([]);
   const [user, setUser] = useState(null);
+  const [familyId, setFamilyId] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({data:{session}}) => {
       setUser(session?.user || null);
       setAuthLoading(false);
-      if (session?.user) fetchItems(session.user.id);
+      if (session?.user) setupProfile(session.user.id);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
-      if (session?.user) fetchItems(session.user.id);
+      if (session?.user) setupProfile(session.user.id);
+      else { setFamilyId(null); setItems([]); }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const fetchItems = async (userId) => {
+  const setupProfile = async (userId) => {
+    const {data: profile} = await supabase
+      .from('profiles')
+      .select('id, family_id, name')
+      .eq('id', userId)
+      .single();
+
+    if (profile?.family_id) {
+      setFamilyId(profile.family_id);
+      fetchItems(profile.family_id);
+      return;
+    }
+
+    // Nouveau compte : créer famille + profil
+    const {data: family} = await supabase
+      .from('families')
+      .insert({created_by: userId})
+      .select()
+      .single();
+
+    await supabase.from('profiles').insert({
+      id: userId,
+      family_id: family.id,
+    });
+
+    setFamilyId(family.id);
+    fetchItems(family.id);
+  };
+
+  const fetchItems = async (famId) => {
     const {data} = await supabase
       .from('items')
       .select('*')
-      .eq('added_by', userId)
+      .eq('family_id', famId)
       .eq('consumed', false);
     if (data) setItems(data.map(i => ({
       ...i, days: i.days_left, emoji: i.emoji||'🛒'
@@ -120,7 +151,7 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
       {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)}/>}
-      {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user}/>}
+      {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId}/>}
       {tab === 'recipes' && <RecipesScreen items={items}/>}
       {tab === 'profile' && <ProfileScreen/>}
 
@@ -154,7 +185,7 @@ export default function App() {
       </View>
 
       <Modal visible={scanOpen} animationType="slide">
-        <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} user={user}/>
+        <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} user={user} familyId={familyId}/>
       </Modal>
     </SafeAreaView>
   );
@@ -506,7 +537,7 @@ function ProfileScreen() {
 }
 
 // ─── SCAN SCREEN ──────────────────────────────────────────────────────────────
-function ScanScreen({onClose, setItems, user}) {
+function ScanScreen({onClose, setItems, user, familyId}) {
   const [mode, setMode] = useState('choice');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -539,19 +570,22 @@ function ScanScreen({onClose, setItems, user}) {
   const addProduct = async () => {
     if (!result) return;
     const newItem = {
+      family_id: familyId,
+      added_by: user?.id,
       name: result.name,
       emoji: result.emoji || '🛒',
+      brand: result.brand || '',
       category: result.category || 'Épicerie',
       location: 'Frigo',
       quantity: 1,
       unit: '',
       dlc: '—',
       days_left: result.days || 30,
-      nutri: result.nutri || null,
-      brand: result.brand || '',
+      nutri_grade: result.nutri || null,
+      kcal: result.kcal || null,
+      img_url: result.imgUrl || null,
       barcode: result.barcode || null,
       consumed: false,
-      added_by: user?.id,
     };
     const {data, error} = await supabase.from('items').insert(newItem).select().single();
     if (error) {
