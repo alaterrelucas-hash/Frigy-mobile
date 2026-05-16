@@ -1207,43 +1207,41 @@ function ScanScreen({onClose, setItems, user, familyId}) {
                     )}
                   </View>
                 </View>
-                {sel && (
-                  <View style={{backgroundColor:'#F8F9FA',borderRadius:10,padding:10,marginBottom:10}}>
-                    <Text style={{fontSize:10,fontWeight:'700',color:C.t3,marginBottom:6}}>DATE LIMITE (DLC)</Text>
-                    {receiptData.items.length === 1 && (
-                      <TouchableOpacity onPress={() => openDlcScan('receipt', p._id, true)}
-                        style={{backgroundColor:C.yellow,padding:10,borderRadius:10,
-                          alignItems:'center',marginBottom:8,flexDirection:'row',justifyContent:'center',gap:6}}>
-                        <Text style={{fontSize:14}}>📷</Text>
-                        <Text style={{color:'#fff',fontWeight:'700',fontSize:13}}>Scanner la date</Text>
-                      </TouchableOpacity>
-                    )}
-                    <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-                      <TextInput
-                        value={p.dlcInput || ''}
-                        onChangeText={t => updateReceiptDlc(p._id, t)}
-                        placeholder={receiptData.items.length === 1 ? 'ou saisir JJ/MM/AAAA' : 'JJ/MM/AAAA'}
-                        placeholderTextColor={C.t4}
-                        keyboardType="numeric"
-                        maxLength={10}
-                        style={{flex:1,backgroundColor:C.card,borderWidth:1.5,
-                          borderColor:parseDlc(p.dlcInput)!==null?C.green:C.border,
-                          borderRadius:8,padding:8,fontSize:13,color:C.t1}}
-                      />
-                      {parseDlc(p.dlcInput) !== null && (
-                        <View style={{paddingHorizontal:10,paddingVertical:8,
-                          backgroundColor:urgBg(parseDlc(p.dlcInput)),borderRadius:8}}>
-                          <Text style={{color:'#fff',fontWeight:'700',fontSize:12}}>
-                            J-{parseDlc(p.dlcInput)}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {!p.dlcInput && (
-                      <Text style={{fontSize:10,color:C.t3,marginTop:4}}>Optionnel — estimation auto sinon</Text>
+                <View style={{backgroundColor:'#F8F9FA',borderRadius:10,padding:10,marginBottom:10}}>
+                  <Text style={{fontSize:10,fontWeight:'700',color:C.t3,marginBottom:6}}>DATE LIMITE (DLC)</Text>
+                  {receiptData.items.length === 1 && (
+                    <TouchableOpacity onPress={() => openDlcScan('receipt', p._id, true)}
+                      style={{backgroundColor:C.yellow,padding:10,borderRadius:10,
+                        alignItems:'center',marginBottom:8,flexDirection:'row',justifyContent:'center',gap:6}}>
+                      <Text style={{fontSize:14}}>📷</Text>
+                      <Text style={{color:'#fff',fontWeight:'700',fontSize:13}}>Scanner la date</Text>
+                    </TouchableOpacity>
+                  )}
+                  <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                    <TextInput
+                      value={p.dlcInput || ''}
+                      onChangeText={t => updateReceiptDlc(p._id, t)}
+                      placeholder={receiptData.items.length === 1 ? 'ou saisir JJ/MM/AAAA' : 'JJ/MM/AAAA'}
+                      placeholderTextColor={C.t4}
+                      keyboardType="numeric"
+                      maxLength={10}
+                      style={{flex:1,backgroundColor:C.card,borderWidth:1.5,
+                        borderColor:parseDlc(p.dlcInput)!==null?C.green:C.border,
+                        borderRadius:8,padding:8,fontSize:13,color:C.t1}}
+                    />
+                    {parseDlc(p.dlcInput) !== null && (
+                      <View style={{paddingHorizontal:10,paddingVertical:8,
+                        backgroundColor:urgBg(parseDlc(p.dlcInput)),borderRadius:8}}>
+                        <Text style={{color:'#fff',fontWeight:'700',fontSize:12}}>
+                          J-{parseDlc(p.dlcInput)}
+                        </Text>
+                      </View>
                     )}
                   </View>
-                )}
+                  {!p.dlcInput && (
+                    <Text style={{fontSize:10,color:C.t3,marginTop:4}}>Optionnel — estimation auto sinon</Text>
+                  )}
+                </View>
                 {sel && (
                   <View style={{flexDirection:'row',gap:6}}>
                     {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => {
