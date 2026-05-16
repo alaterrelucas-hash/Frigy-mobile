@@ -581,6 +581,32 @@ function ScanScreen({onClose, setItems, user, familyId}) {
   const [location, setLocation] = useState('Frigo');
 
   const [dlcInput, setDlcInput] = useState('');
+  const dlcCamRef = useRef(null);
+  const [dlcCapturing, setDlcCapturing] = useState(false);
+
+  const captureDlc = async () => {
+    if (!dlcCamRef.current) return;
+    setDlcCapturing(true);
+    try {
+      const photo = await dlcCamRef.current.takePictureAsync({quality: 0.8});
+      const base64 = await FileSystem.readAsStringAsync(photo.uri, {encoding: 'base64'});
+      const res = await fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}`},
+        body: JSON.stringify({imageBase64: base64, mimeType: 'image/jpeg', mode: 'dlc_only'}),
+      });
+      const data = await res.json();
+      if (data.dlc) {
+        setDlcInput(formatDlcInput(data.dlc.replace(/\D/g, '')));
+        setMode('scanner');
+      } else {
+        Alert.alert('Date non trouvée', 'Pointe vers la date et réessaie, ou saisis-la manuellement.');
+      }
+    } catch(e) {
+      Alert.alert('Erreur', 'Impossible de lire la date.');
+    }
+    setDlcCapturing(false);
+  };
 
   // Photo mode
   const [photoLoading, setPhotoLoading] = useState(false);
@@ -683,6 +709,44 @@ function ScanScreen({onClose, setItems, user, familyId}) {
     </SafeAreaView>
   );
 
+  if (mode === 'dlcScan') return (
+    <View style={{flex:1,backgroundColor:'#000'}}>
+      <CameraView ref={dlcCamRef} style={{flex:1}} facing="back"/>
+      <SafeAreaView style={{position:'absolute',top:0,left:0,right:0,bottom:0}}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',padding:20}}>
+          <TouchableOpacity onPress={() => setMode('scanner')}
+            style={{backgroundColor:'rgba(0,0,0,0.55)',paddingHorizontal:18,paddingVertical:10,borderRadius:22}}>
+            <Text style={{color:'#fff',fontWeight:'600',fontSize:14}}>Annuler</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setMode('scanner')}
+            style={{backgroundColor:'rgba(0,0,0,0.55)',paddingHorizontal:18,paddingVertical:10,borderRadius:22}}>
+            <Text style={{color:'#fff',fontWeight:'600',fontSize:14}}>Passer</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center'}}>
+          <View style={{backgroundColor:'rgba(0,0,0,0.65)',paddingHorizontal:22,paddingVertical:12,borderRadius:14,marginBottom:28}}>
+            <Text style={{color:'#fff',fontSize:16,fontWeight:'700'}}>Scanner la date d'expiration</Text>
+          </View>
+          <View style={{width:290,height:90,borderRadius:12,borderWidth:2,borderColor:'rgba(255,255,255,0.85)'}}/>
+        </View>
+        <View style={{paddingHorizontal:24,paddingBottom:20,gap:14}}>
+          <TouchableOpacity onPress={captureDlc} disabled={dlcCapturing}
+            style={{backgroundColor:C.yellow,padding:16,borderRadius:14,alignItems:'center'}}>
+            {dlcCapturing
+              ? <ActivityIndicator color="#fff"/>
+              : <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>Capturer</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setMode('scanner')} style={{alignItems:'center',paddingVertical:4}}>
+            <Text style={{color:'rgba(255,255,255,0.8)',fontWeight:'600',fontSize:14}}>Saisir manuellement</Text>
+          </TouchableOpacity>
+          <View style={{alignItems:'center'}}>
+            <Text style={{fontSize:28}}>🔦</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+
   if (mode === 'scanner') {
     if (!permission?.granted) return (
       <SafeAreaView style={[styles.safe,{alignItems:'center',justifyContent:'center',padding:30}]}>
@@ -727,12 +791,18 @@ function ScanScreen({onClose, setItems, user, familyId}) {
             </View>
           </View>
           <View style={[styles.card, {padding:16, marginBottom:12}]}>
-            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:8}}>DATE LIMITE (DLC)</Text>
+            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>DATE LIMITE (DLC)</Text>
+            <TouchableOpacity onPress={() => setMode('dlcScan')}
+              style={{backgroundColor:C.yellow,padding:13,borderRadius:12,
+                alignItems:'center',marginBottom:10,flexDirection:'row',justifyContent:'center',gap:8}}>
+              <Text style={{fontSize:16}}>📷</Text>
+              <Text style={{color:'#fff',fontWeight:'700',fontSize:14}}>Scanner la date</Text>
+            </TouchableOpacity>
             <View style={{flexDirection:'row',alignItems:'center',gap:10}}>
               <TextInput
                 value={dlcInput}
                 onChangeText={t => setDlcInput(formatDlcInput(t))}
-                placeholder="JJ/MM/AAAA"
+                placeholder="ou saisir JJ/MM/AAAA"
                 placeholderTextColor={C.t4}
                 keyboardType="numeric"
                 maxLength={10}

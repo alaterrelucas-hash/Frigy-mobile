@@ -11,7 +11,49 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, mimeType } = await req.json()
+    const { imageBase64, mimeType, mode } = await req.json()
+
+    if (mode === 'dlc_only') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 256,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mimeType ?? 'image/jpeg', data: imageBase64 },
+              },
+              {
+                type: 'text',
+                text: `Regarde cette image et trouve la date limite de consommation (DLC, DDM, DLUO, BBE, "Best Before", "Consommer avant", "À consommer avant le").
+La date peut être imprimée directement sur l'emballage, en relief, ou sur une étiquette.
+Formats possibles : JJ/MM/AAAA, JJ.MM.AAAA, MM/AAAA, AAAA-MM-JJ, JJ MMM AAAA, etc.
+
+Réponds UNIQUEMENT avec un JSON valide :
+{"dlc": "JJ/MM/AAAA"} si tu trouves la date (convertis toujours au format JJ/MM/AAAA)
+{"dlc": null} si aucune date n'est clairement lisible.
+Aucun texte autour, aucun markdown.`,
+              },
+            ],
+          }],
+        }),
+      })
+      const data = await response.json()
+      const content = data.content?.[0]?.text ?? '{}'
+      let result = { dlc: null }
+      try { result = JSON.parse(content) } catch { /* ignore */ }
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
