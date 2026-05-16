@@ -51,6 +51,27 @@ async function searchOpenFoodFacts(barcode) {
   } catch { return null; }
 }
 
+function parseDlc(str) {
+  const clean = (str||'').replace(/[^0-9/]/g, '');
+  const parts = clean.split('/');
+  let date = null;
+  if (parts.length === 3 && parts[2].length >= 4) {
+    date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  } else if (parts.length === 2 && parts[1].length >= 4) {
+    date = new Date(parseInt(parts[1]), parseInt(parts[0]) - 1, 28);
+  }
+  if (!date || isNaN(date)) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.floor((date - today) / 86400000);
+}
+
+function formatDlcInput(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return digits.slice(0,2) + '/' + digits.slice(2);
+  return digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4);
+}
+
 function suggestLocation(category, name) {
   const c = (category||'').toLowerCase();
   const n = (name||'').toLowerCase();
@@ -559,6 +580,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
   const [result, setResult] = useState(null);
   const [location, setLocation] = useState('Frigo');
 
+  const [dlcInput, setDlcInput] = useState('');
+
   // Photo mode
   const [photoLoading, setPhotoLoading] = useState(false);
   const [detectedProducts, setDetectedProducts] = useState(null);
@@ -591,6 +614,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
 
   const addProduct = async () => {
     if (!result) return;
+    const dlcDays = parseDlc(dlcInput);
     const newItem = {
       family_id: familyId,
       added_by: user?.id,
@@ -601,8 +625,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       location,
       quantity: 1,
       unit: '',
-      dlc: '—',
-      days_left: result.days || 30,
+      dlc: dlcInput || '—',
+      days_left: dlcDays !== null ? dlcDays : (result.days || 30),
       nutri_grade: result.nutri || null,
       kcal: result.kcal || null,
       img_url: result.imgUrl || null,
@@ -703,6 +727,35 @@ function ScanScreen({onClose, setItems, user, familyId}) {
             </View>
           </View>
           <View style={[styles.card, {padding:16, marginBottom:12}]}>
+            <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:8}}>DATE LIMITE (DLC)</Text>
+            <View style={{flexDirection:'row',alignItems:'center',gap:10}}>
+              <TextInput
+                value={dlcInput}
+                onChangeText={t => setDlcInput(formatDlcInput(t))}
+                placeholder="JJ/MM/AAAA"
+                placeholderTextColor={C.t4}
+                keyboardType="numeric"
+                maxLength={10}
+                style={{flex:1,backgroundColor:'#FAFAFA',borderWidth:1.5,
+                  borderColor: parseDlc(dlcInput) !== null ? C.green : C.border,
+                  borderRadius:10,padding:11,fontSize:15,color:C.t1}}
+              />
+              {parseDlc(dlcInput) !== null && (
+                <View style={{paddingHorizontal:12,paddingVertical:8,
+                  backgroundColor:urgBg(parseDlc(dlcInput)),borderRadius:10}}>
+                  <Text style={{color:'#fff',fontWeight:'700',fontSize:13}}>
+                    J-{parseDlc(dlcInput)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {!dlcInput && (
+              <Text style={{fontSize:11,color:C.t3,marginTop:6}}>
+                Optionnel — estimation auto sinon
+              </Text>
+            )}
+          </View>
+          <View style={[styles.card, {padding:16, marginBottom:12}]}>
             <Text style={{fontSize:12,fontWeight:'700',color:C.t3,marginBottom:10}}>OÙ LE RANGER ?</Text>
             <View style={{flexDirection:'row',gap:8}}>
               {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => (
@@ -722,7 +775,7 @@ function ScanScreen({onClose, setItems, user, familyId}) {
             <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>✅ Ranger dans {location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.greenBtn, {backgroundColor:'transparent',marginTop:10}]}
-            onPress={() => {setResult(null); setScanned(false);}}>
+            onPress={() => {setResult(null); setScanned(false); setDlcInput('');}}>
             <Text style={{color:C.green,fontWeight:'700',fontSize:15}}>← Scanner un autre</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -797,6 +850,14 @@ function ScanScreen({onClose, setItems, user, familyId}) {
     setDetectedProducts(prev => prev.map(p => p._id === id ? {...p, location: loc} : p));
   };
 
+  const updateProductDlc = (id, raw) => {
+    const formatted = formatDlcInput(raw);
+    const days = parseDlc(formatted);
+    setDetectedProducts(prev => prev.map(p =>
+      p._id === id ? {...p, dlcInput: formatted, days_left: days !== null ? days : p.days_left} : p
+    ));
+  };
+
   const savePhotoProducts = async () => {
     const toSave = (detectedProducts||[]).filter(p => selectedIds.includes(p._id));
     if (!toSave.length) return;
@@ -862,7 +923,24 @@ function ScanScreen({onClose, setItems, user, familyId}) {
                   <View style={{flex:1}}>
                     <Text style={styles.productName}>{p.name}</Text>
                     {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
-                    {p.dlc && <Text style={{fontSize:11,color:C.green,fontWeight:'600'}}>DLC {p.dlc}</Text>}
+                    <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:2}}>
+                    <TextInput
+                      value={p.dlcInput || ''}
+                      onChangeText={t => updateProductDlc(p._id, t)}
+                      placeholder={p.dlc || 'JJ/MM/AAAA'}
+                      placeholderTextColor={p.dlc ? C.green : C.t4}
+                      keyboardType="numeric"
+                      maxLength={10}
+                      style={{flex:1,fontSize:12,borderBottomWidth:1,
+                        borderColor: p.dlcInput ? C.green : C.border,
+                        color:C.t1,paddingVertical:2}}
+                    />
+                    {parseDlc(p.dlcInput) !== null && (
+                      <Text style={{fontSize:10,fontWeight:'700',color:urgBg(parseDlc(p.dlcInput))}}>
+                        J-{parseDlc(p.dlcInput)}
+                      </Text>
+                    )}
+                  </View>
                   </View>
                 </View>
                 {sel && (
