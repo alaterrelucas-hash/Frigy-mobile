@@ -872,8 +872,8 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       location: p.location || 'Frigo',
       quantity: 1,
       unit: '',
-      dlc: p.dlc || '—',
-      days_left: p.days_left || 30,
+      dlc: p.dlcInput || p.dlc || '—',
+      days_left: parseDlc(p.dlcInput) !== null ? parseDlc(p.dlcInput) : (p.days_left || 30),
       nutri_grade: null,
       consumed: false,
     }));
@@ -923,26 +923,44 @@ function ScanScreen({onClose, setItems, user, familyId}) {
                   <View style={{flex:1}}>
                     <Text style={styles.productName}>{p.name}</Text>
                     {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
-                    <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:2}}>
-                    <TextInput
-                      value={p.dlcInput || ''}
-                      onChangeText={t => updateProductDlc(p._id, t)}
-                      placeholder={p.dlc || 'JJ/MM/AAAA'}
-                      placeholderTextColor={p.dlc ? C.green : C.t4}
-                      keyboardType="numeric"
-                      maxLength={10}
-                      style={{flex:1,fontSize:12,borderBottomWidth:1,
-                        borderColor: p.dlcInput ? C.green : C.border,
-                        color:C.t1,paddingVertical:2}}
-                    />
-                    {parseDlc(p.dlcInput) !== null && (
-                      <Text style={{fontSize:10,fontWeight:'700',color:urgBg(parseDlc(p.dlcInput))}}>
-                        J-{parseDlc(p.dlcInput)}
+                  </View>
+                </View>
+                {sel && (
+                  <View style={{backgroundColor:'#F8F9FA',borderRadius:10,padding:10,marginBottom:10}}>
+                    <Text style={{fontSize:10,fontWeight:'700',color:C.t3,marginBottom:6}}>DATE LIMITE (DLC)</Text>
+                    <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                      <TextInput
+                        value={p.dlcInput || ''}
+                        onChangeText={t => updateProductDlc(p._id, t)}
+                        placeholder={p.dlc || 'JJ/MM/AAAA'}
+                        placeholderTextColor={p.dlc ? C.green : C.t4}
+                        keyboardType="numeric"
+                        maxLength={10}
+                        style={{flex:1,backgroundColor:C.card,borderWidth:1.5,
+                          borderColor: parseDlc(p.dlcInput) !== null ? C.green : C.border,
+                          borderRadius:8,padding:8,fontSize:13,color:C.t1}}
+                      />
+                      {parseDlc(p.dlcInput) !== null && (
+                        <View style={{paddingHorizontal:10,paddingVertical:8,
+                          backgroundColor:urgBg(parseDlc(p.dlcInput)),borderRadius:8}}>
+                          <Text style={{color:'#fff',fontWeight:'700',fontSize:12}}>
+                            J-{parseDlc(p.dlcInput)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {!p.dlcInput && p.dlc && (
+                      <Text style={{fontSize:10,color:C.green,marginTop:4}}>
+                        IA a détecté : {p.dlc} — tape pour corriger
+                      </Text>
+                    )}
+                    {!p.dlcInput && !p.dlc && (
+                      <Text style={{fontSize:10,color:C.t3,marginTop:4}}>
+                        Optionnel — estimation auto sinon
                       </Text>
                     )}
                   </View>
-                  </View>
-                </View>
+                )}
                 {sel && (
                   <View style={{flexDirection:'row',gap:6}}>
                     {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => {
