@@ -1,5 +1,13 @@
 # Changelog — Frigy
 
+## [1.0.4] — 2026-05-16
+
+### Ajouté
+- **DLC manuelle au scan code-barres** : carte de saisie avec TextInput auto-formaté (JJ/MM/AAAA) + badge J-X en couleur d'urgence (rouge/orange/jaune)
+- **DLC manuelle en mode photo** : champ DLC par produit dans l'écran de confirmation — écrase la DLC auto détectée par l'IA si saisie
+- Helpers `parseDlc()` et `formatDlcInput()` pour gestion robuste des dates en français
+- Remise à zéro de la DLC lors du "Scanner un autre"
+
 ## [1.0.3] — 2026-05-13
 
 ### Ajouté

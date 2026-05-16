@@ -30,6 +30,8 @@
 
 ### Scan
 - [ ] Mode photo : reconnaissance multi-produits par IA (photo des courses)
+- [x] DLC manuelle lors du scan code-barres (format JJ/MM/AAAA, badge J-X)
+- [x] DLC manuelle par produit en mode photo des courses
 - [ ] Ajout manuel si produit inconnu (formulaire simplifié)
 - [ ] Historique des scans récents
 
