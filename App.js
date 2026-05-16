@@ -745,6 +745,7 @@ function ProfileScreen() {
 // ─── SCAN SCREEN ──────────────────────────────────────────────────────────────
 const EDGE_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/analyze-photo';
 const RECIPES_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/suggest-recipes';
+const RECEIPT_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/scan-receipt';
 
 function ScanScreen({onClose, setItems, user, familyId}) {
   const [mode, setMode] = useState('choice');
@@ -796,10 +797,78 @@ function ScanScreen({onClose, setItems, user, familyId}) {
 
   // Photo mode
   const [photoLoading, setPhotoLoading] = useState(false);
+
   const [detectedProducts, setDetectedProducts] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [photoLocation, setPhotoLocation] = useState('Frigo');
   const [saving, setSaving] = useState(false);
+
+  // Receipt mode
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptData, setReceiptData] = useState(null); // {store, total, items:[...with _id,location]}
+  const [receiptSelectedIds, setReceiptSelectedIds] = useState([]);
+  const [receiptSaving, setReceiptSaving] = useState(false);
+
+  const launchReceipt = async (fromCamera) => {
+    setReceiptLoading(true);
+    try {
+      const picked = fromCamera
+        ? await ImagePicker.launchCameraAsync({quality: 0.85, allowsEditing: false})
+        : await ImagePicker.launchImageLibraryAsync({quality: 0.85, mediaTypes: ['images']});
+      if (picked.canceled) { setReceiptLoading(false); return; }
+      const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, {encoding: 'base64'});
+      const res = await fetch(RECEIPT_FN_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}`},
+        body: JSON.stringify({imageBase64: base64, mimeType: 'image/jpeg'}),
+      });
+      const data = await res.json();
+      const withIds = (data.items || []).map((p, i) => ({
+        ...p, _id: i.toString(),
+        location: suggestLocation(p.category, p.name),
+        days_left: estimateDays(p.category, p.name),
+        emoji: p.emoji || '🛒',
+      }));
+      setReceiptData({store: data.store, total: data.total, items: withIds});
+      setReceiptSelectedIds(withIds.map(p => p._id));
+    } catch(e) {
+      Alert.alert('Erreur', 'Impossible d\'analyser le ticket.');
+    }
+    setReceiptLoading(false);
+  };
+
+  const updateReceiptLocation = (id, loc) => {
+    setReceiptData(prev => ({...prev, items: prev.items.map(p => p._id === id ? {...p, location: loc} : p)}));
+  };
+
+  const saveReceiptProducts = async () => {
+    const toSave = (receiptData?.items || []).filter(p => receiptSelectedIds.includes(p._id));
+    if (!toSave.length) return;
+    setReceiptSaving(true);
+    const rows = toSave.map(p => ({
+      family_id: familyId,
+      added_by: user?.id,
+      name: p.name,
+      emoji: p.emoji,
+      brand: p.brand || '',
+      category: p.category || 'épicerie',
+      location: p.location,
+      quantity: p.quantity || 1,
+      unit: '',
+      dlc: '—',
+      days_left: p.days_left || 30,
+      nutri_grade: null,
+      consumed: false,
+      price: p.unit_price || null,
+    }));
+    const {data, error} = await supabase.from('items').insert(rows).select();
+    if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setReceiptSaving(false); return; }
+    setItems(prev => [...prev, ...(data || []).map(i => ({...i, days: i.days_left}))]);
+    Alert.alert('✅ Ajouté !', `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} au stock.`);
+    setReceiptSaving(false);
+    setReceiptData(null);
+    setReceiptSelectedIds([]);
+  };
 
   const handleBarcode = async ({data}) => {
     if (scanned || loading) return;
@@ -866,15 +935,18 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       </View>
       <ScrollView style={{padding:16}}>
         {[
-          {id:'barcode', e:'📊', label:'Scanner code-barres', desc:'Pointe vers le code-barres — reconnaissance instantanée', tag:'RECOMMANDÉ', col:C.green},
-          {id:'photo',   e:'📷', label:'Photo des courses',   desc:'Prends en photo plusieurs produits à la fois', tag:'RAPIDE', col:C.yellow},
+          {id:'barcode',  e:'📊', label:'Scanner code-barres', desc:'Pointe vers le code-barres — reconnaissance instantanée', tag:'RECOMMANDÉ', col:C.green},
+          {id:'photo',    e:'📷', label:'Photo des courses',   desc:'Prends en photo plusieurs produits à la fois', tag:'RAPIDE', col:C.yellow},
+          {id:'receipt',  e:'🧾', label:'Scan ticket de caisse', desc:'Photo du ticket — prix et produits extraits automatiquement', tag:'NOUVEAU', col:'#8B5CF6'},
         ].map(m => (
           <TouchableOpacity key={m.id} onPress={() => {
             if (m.id === 'barcode') {
               if (!permission?.granted) requestPermission();
               setMode('scanner');
-            } else {
+            } else if (m.id === 'photo') {
               setMode('photo');
+            } else {
+              setMode('receipt');
             }
           }} style={[styles.card, {marginBottom:12,padding:18,flexDirection:'row',gap:14,alignItems:'center'}]}>
             <View style={{width:52,height:52,borderRadius:15,backgroundColor:`${m.col}15`,alignItems:'center',justifyContent:'center'}}>
@@ -1068,6 +1140,127 @@ function ScanScreen({onClose, setItems, user, familyId}) {
             </View>
           </SafeAreaView>
       </View>
+    );
+  }
+
+  if (mode === 'receipt') {
+    if (receiptLoading) return (
+      <SafeAreaView style={[styles.safe,{alignItems:'center',justifyContent:'center'}]}>
+        <ActivityIndicator color="#8B5CF6" size="large"/>
+        <Text style={{marginTop:16,fontSize:15,fontWeight:'600',color:C.t2}}>Claude analyse ton ticket…</Text>
+        <Text style={{marginTop:6,fontSize:13,color:C.t3}}>Extraction des produits et prix</Text>
+      </SafeAreaView>
+    );
+
+    if (receiptData) return (
+      <SafeAreaView style={[styles.safe,{backgroundColor:C.bg}]}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
+          <View>
+            <Text style={styles.screenTitle}>{receiptData.items.length} produit{receiptData.items.length>1?'s':''} détecté{receiptData.items.length>1?'s':''}</Text>
+            {receiptData.store && <Text style={{fontSize:12,color:C.t3,marginTop:2}}>🏪 {receiptData.store}{receiptData.total ? ` · Total ${receiptData.total.toFixed(2)} €` : ''}</Text>}
+          </View>
+          <TouchableOpacity onPress={() => setReceiptData(null)} style={styles.closeBtn}>
+            <Text style={{fontSize:18,color:C.t2}}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={{flex:1,paddingHorizontal:16}}>
+          {receiptData.items.map(p => {
+            const sel = receiptSelectedIds.includes(p._id);
+            return (
+              <View key={p._id} style={[styles.card,{marginBottom:8,padding:12,opacity:sel?1:0.45}]}>
+                <View style={{flexDirection:'row',alignItems:'center',marginBottom:sel?10:0}}>
+                  <TouchableOpacity onPress={() => setReceiptSelectedIds(prev =>
+                    sel ? prev.filter(x => x !== p._id) : [...prev, p._id]
+                  )} style={{marginRight:10}}>
+                    <View style={{width:24,height:24,borderRadius:6,borderWidth:2,
+                      borderColor:sel?'#8B5CF6':C.t4,
+                      backgroundColor:sel?'#8B5CF6':'transparent',
+                      alignItems:'center',justifyContent:'center'}}>
+                      {sel && <Text style={{color:'#fff',fontSize:13,fontWeight:'800'}}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={{fontSize:26,marginRight:10}}>{p.emoji}</Text>
+                  <View style={{flex:1}}>
+                    <Text style={styles.productName}>{p.name}</Text>
+                    {p.brand && <Text style={styles.productSub}>{p.brand}</Text>}
+                  </View>
+                  <View style={{alignItems:'flex-end',gap:4}}>
+                    {p.unit_price != null && (
+                      <View style={{paddingHorizontal:10,paddingVertical:4,backgroundColor:'#8B5CF620',borderRadius:8}}>
+                        <Text style={{fontSize:13,fontWeight:'700',color:'#8B5CF6'}}>{p.unit_price.toFixed(2)} €</Text>
+                      </View>
+                    )}
+                    {p.quantity > 1 && (
+                      <Text style={{fontSize:10,color:C.t3}}>×{p.quantity}</Text>
+                    )}
+                  </View>
+                </View>
+                {sel && (
+                  <View style={{flexDirection:'row',gap:6}}>
+                    {[{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}].map(l => {
+                      const active = p.location === l.id;
+                      return (
+                        <TouchableOpacity key={l.id} onPress={() => updateReceiptLocation(p._id, l.id)}
+                          style={{flex:1,alignItems:'center',paddingVertical:6,borderRadius:8,borderWidth:1.5,
+                            borderColor:active?'#8B5CF6':C.border,
+                            backgroundColor:active?'#8B5CF615':'#FAFAFA'}}>
+                          <Text style={{fontSize:16}}>{l.icon}</Text>
+                          <Text style={{fontSize:9,fontWeight:'600',color:active?'#8B5CF6':C.t3,marginTop:1}}>{l.id}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+          <TouchableOpacity
+            style={[styles.greenBtn,{marginTop:4,marginBottom:10,backgroundColor:'#8B5CF6'}]}
+            onPress={saveReceiptProducts} disabled={receiptSaving||receiptSelectedIds.length===0}>
+            {receiptSaving ? <ActivityIndicator color="#fff"/> :
+              <Text style={{color:'#fff',fontWeight:'700',fontSize:15}}>
+                ✅ Ajouter {receiptSelectedIds.length} produit{receiptSelectedIds.length>1?'s':''}
+              </Text>}
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.greenBtn,{backgroundColor:'transparent',marginBottom:20}]} onPress={() => setReceiptData(null)}>
+            <Text style={{color:'#8B5CF6',fontWeight:'700',fontSize:15}}>← Scanner un autre ticket</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+
+    return (
+      <SafeAreaView style={[styles.safe,{backgroundColor:C.bg}]}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:20}}>
+          <Text style={styles.screenTitle}>Scan ticket de caisse</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Text style={{fontSize:18,color:C.t2}}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={{padding:16}}>
+          <View style={[styles.card,{padding:20,alignItems:'center',marginBottom:16}]}>
+            <Text style={{fontSize:64,marginBottom:12}}>🧾</Text>
+            <Text style={{fontSize:16,fontWeight:'700',color:C.t1,marginBottom:6,textAlign:'center'}}>
+              Prends en photo ton ticket
+            </Text>
+            <Text style={{fontSize:13,color:C.t3,textAlign:'center',marginBottom:4}}>
+              Claude extrait automatiquement tous les produits alimentaires et leurs prix
+            </Text>
+          </View>
+          {[
+            {icon:'📸', label:'Prendre une photo', onPress:() => launchReceipt(true)},
+            {icon:'🖼️', label:'Choisir depuis la galerie', onPress:() => launchReceipt(false)},
+          ].map(btn => (
+            <TouchableOpacity key={btn.label} onPress={btn.onPress}
+              style={[styles.card,{marginBottom:12,padding:18,flexDirection:'row',gap:14,alignItems:'center'}]}>
+              <View style={{width:48,height:48,borderRadius:14,backgroundColor:'#8B5CF615',alignItems:'center',justifyContent:'center'}}>
+                <Text style={{fontSize:24}}>{btn.icon}</Text>
+              </View>
+              <Text style={{fontSize:15,fontWeight:'600',color:C.t1}}>{btn.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
