@@ -606,9 +606,9 @@ function ScanScreen({onClose, setItems, user, familyId}) {
       const data = await res.json();
       if (data.dlc) {
         if (dlcScanProductId) {
-          updateProductDlc(dlcScanProductId, data.dlc.replace(/\D/g, ''));
+          updateProductDlc(dlcScanProductId, data.dlc);
         } else {
-          setDlcInput(formatDlcInput(data.dlc.replace(/\D/g, '')));
+          setDlcInput(data.dlc);
         }
         setMode(dlcScanReturn);
       } else {

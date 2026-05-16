@@ -23,7 +23,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 256,
+          max_tokens: 512,
           messages: [{
             role: 'user',
             content: [
@@ -33,23 +33,35 @@ serve(async (req) => {
               },
               {
                 type: 'text',
-                text: `Regarde cette image et trouve la date limite de consommation (DLC, DDM, DLUO, BBE, "Best Before", "Consommer avant", "À consommer avant le").
-La date peut être imprimée directement sur l'emballage, en relief, ou sur une étiquette.
-Formats possibles : JJ/MM/AAAA, JJ.MM.AAAA, MM/AAAA, AAAA-MM-JJ, JJ MMM AAAA, etc.
+                text: `Tu es expert en lecture d'emballages alimentaires. Cherche dans cette image TOUTE séquence de chiffres qui ressemble à une date d'expiration.
 
-Réponds UNIQUEMENT avec un JSON valide :
-{"dlc": "JJ/MM/AAAA"} si tu trouves la date (convertis toujours au format JJ/MM/AAAA)
-{"dlc": null} si aucune date n'est clairement lisible.
-Aucun texte autour, aucun markdown.`,
+Indices visuels : cherche près des mots DLC, DDM, DLUO, BBE, EXP, "Best Before", "Consommer avant", "À consommer avant le", ou simplement une date isolée sur l'emballage.
+
+Formats courants sur les emballages : 15/06/26, 15/06/2026, 15.06.2026, 06/2026, 06/26, JUN 2026, 15 JUN 2026, 2026-06-15.
+
+RÈGLES DE CONVERSION vers DD/MM/YYYY :
+- JJ/MM/AA → ajoute 2000 (ex: 15/06/26 → "15/06/2026")
+- MM/AAAA ou MM/AA → utilise "01" comme jour (ex: 06/2026 → "01/06/2026")
+- AAAA-MM-JJ → inverse (ex: 2026-06-15 → "15/06/2026")
+- JJ MMM AAAA → convertis le mois en chiffre (ex: 15 JUN 2026 → "15/06/2026")
+
+Réponds UNIQUEMENT avec ce JSON, sans markdown :
+{"dlc": "DD/MM/YYYY"}
+ou {"dlc": null} SEULEMENT si vraiment aucun chiffre ressemblant à une date n'est visible du tout.`,
               },
             ],
           }],
         }),
       })
       const data = await response.json()
-      const content = data.content?.[0]?.text ?? '{}'
-      let result = { dlc: null }
-      try { result = JSON.parse(content) } catch { /* ignore */ }
+      const content = data.content?.[0]?.text?.trim() ?? '{}'
+      let result: { dlc: string | null } = { dlc: null }
+      try {
+        result = JSON.parse(content)
+      } catch {
+        const match = content.match(/\{[\s\S]*?\}/)
+        if (match) try { result = JSON.parse(match[0]) } catch { /* ignore */ }
+      }
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
