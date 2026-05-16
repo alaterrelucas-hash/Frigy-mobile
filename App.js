@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView,
-         TextInput, Alert, ActivityIndicator, Modal, Platform, Image } from 'react-native';
+         TextInput, Alert, ActivityIndicator, Modal, Platform, Image, Dimensions } from 'react-native';
+
+const SCREEN_W = Dimensions.get('window').width;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -406,12 +408,21 @@ function HomeScreen({items, expiring, onNav, onScan, onUrgent}) {
 }
 
 // ─── FRIDGE SCREEN ────────────────────────────────────────────────────────────
+const LOC_PAGES = [{id:'Frigo',icon:'❄️'},{id:'Congélateur',icon:'🧊'},{id:'Placard',icon:'🗄️'}];
+
 function FridgeScreen({items, setItems, user, urgentMode, onExitUrgent}) {
   const [loc, setLoc] = useState('Frigo');
   const [q, setQ] = useState('');
+  const [restLoc, setRestLoc] = useState(0);
+  const locScrollRef = useRef(null);
 
   const urgent = items.filter(i => i.days <= 4).sort((a,b) => a.days - b.days);
   const rest = items.filter(i => i.days > 4).sort((a,b) => a.days - b.days);
+
+  const goToPage = (i) => {
+    locScrollRef.current?.scrollTo({x: i * SCREEN_W, animated: true});
+    setRestLoc(i);
+  };
   const shown = items
     .filter(i => i.location === loc && (!q || i.name.toLowerCase().includes(q.toLowerCase())))
     .sort((a,b) => a.days - b.days);
@@ -450,8 +461,8 @@ function FridgeScreen({items, setItems, user, urgentMode, onExitUrgent}) {
   );
 
   if (urgentMode) return (
-    <View style={styles.screen}>
-      <View style={{padding:16}}>
+    <View style={{flex:1,backgroundColor:C.bg}}>
+      <View style={{padding:16,paddingBottom:8}}>
         <TouchableOpacity onPress={onExitUrgent} style={{flexDirection:'row',alignItems:'center',marginBottom:14}}>
           <Text style={{fontSize:14,color:C.green,fontWeight:'600'}}>← Vue par emplacement</Text>
         </TouchableOpacity>
@@ -462,39 +473,80 @@ function FridgeScreen({items, setItems, user, urgentMode, onExitUrgent}) {
             style={{flex:1,fontSize:14,color:C.t1}} placeholderTextColor={C.t4}/>
         </View>
       </View>
-      <ScrollView style={{flex:1,paddingHorizontal:16}}>
-        {urgent.length > 0 && (
-          <>
-            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10}}>
-              <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
-              <Text style={{fontSize:11,fontWeight:'700',color:C.red}}>⚠️ À CONSOMMER EN PRIORITÉ ({urgent.length})</Text>
-              <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
-            </View>
+
+      {urgent.length > 0 && (
+        <View>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginHorizontal:16,marginBottom:8}}>
+            <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
+            <Text style={{fontSize:11,fontWeight:'700',color:C.red}}>
+              ⚠️ PRIORITÉ ({urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).length})
+            </Text>
+            <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
+          </View>
+          <ScrollView style={{maxHeight:270}} contentContainerStyle={{paddingHorizontal:16}}>
             {urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => (
               <ProductRow key={item.id} item={item}/>
             ))}
-          </>
-        )}
-        {rest.length > 0 && (
-          <>
-            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginVertical:14}}>
-              <View style={{flex:1,height:1,backgroundColor:C.border}}/>
-              <Text style={{fontSize:11,fontWeight:'700',color:C.t3}}>📦 LE RESTE DU STOCK ({rest.length})</Text>
-              <View style={{flex:1,height:1,backgroundColor:C.border}}/>
-            </View>
-            {rest.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => (
-              <ProductRow key={item.id} item={item}/>
-            ))}
-          </>
-        )}
-        {items.length === 0 && (
-          <View style={{alignItems:'center',paddingTop:60}}>
-            <Text style={{fontSize:52,marginBottom:12}}>📭</Text>
-            <Text style={{fontSize:15,fontWeight:'600',color:C.t2}}>Frigo vide</Text>
+          </ScrollView>
+        </View>
+      )}
+
+      {rest.length > 0 && (
+        <View style={{flex:1}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginHorizontal:16,marginVertical:10}}>
+            <View style={{flex:1,height:1,backgroundColor:C.border}}/>
+            <Text style={{fontSize:11,fontWeight:'700',color:C.t3}}>📦 RESTE DU STOCK</Text>
+            <View style={{flex:1,height:1,backgroundColor:C.border}}/>
           </View>
-        )}
-        <View style={{height:20}}/>
-      </ScrollView>
+
+          <View style={{flexDirection:'row',paddingHorizontal:16,gap:8,marginBottom:10}}>
+            {LOC_PAGES.map((l, i) => {
+              const cnt = rest.filter(x => x.location === l.id).length;
+              const on = restLoc === i;
+              return (
+                <TouchableOpacity key={l.id} onPress={() => goToPage(i)}
+                  style={{flex:1,alignItems:'center',paddingVertical:8,borderRadius:12,
+                    backgroundColor: on ? C.card : 'transparent',
+                    borderWidth:1.5, borderColor: on ? C.green : 'transparent'}}>
+                  <Text style={{fontSize:18}}>{l.icon}</Text>
+                  <Text style={{fontSize:11,fontWeight:'600',color: on ? C.green : C.t3,marginTop:2}}>{l.id}</Text>
+                  <Text style={{fontSize:10,color:C.t4}}>{cnt}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <ScrollView
+            ref={locScrollRef}
+            horizontal pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={e => setRestLoc(Math.round(e.nativeEvent.contentOffset.x / SCREEN_W))}
+            style={{flex:1}}
+          >
+            {LOC_PAGES.map(l => {
+              const locItems = rest.filter(i => i.location === l.id && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
+              return (
+                <ScrollView key={l.id} style={{width:SCREEN_W}} contentContainerStyle={{paddingHorizontal:16,paddingBottom:24}}>
+                  {locItems.length === 0 ? (
+                    <View style={{alignItems:'center',paddingVertical:32}}>
+                      <Text style={{fontSize:36,marginBottom:8}}>{l.icon}</Text>
+                      <Text style={{fontSize:13,color:C.t3}}>Rien dans ce {l.id.toLowerCase()}</Text>
+                    </View>
+                  ) : locItems.map(item => <ProductRow key={item.id} item={item}/>)}
+                </ScrollView>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {items.length === 0 && (
+        <View style={{flex:1,alignItems:'center',justifyContent:'center'}}>
+          <Text style={{fontSize:52,marginBottom:12}}>📭</Text>
+          <Text style={{fontSize:15,fontWeight:'600',color:C.t2}}>Frigo vide</Text>
+        </View>
+      )}
     </View>
   );
 
