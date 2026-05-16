@@ -167,6 +167,7 @@ export default function App() {
   };
 
   const [scanOpen, setScanOpen] = useState(false);
+  const [fridgeUrgent, setFridgeUrgent] = useState(false);
   const expiring = items.filter(i => i.days <= 4).sort((a,b) => a.days - b.days);
 
   if (authLoading) return (
@@ -182,8 +183,8 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)}/>}
-      {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId}/>}
+      {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }}/>}
+      {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)}/>}
       {tab === 'recipes' && <RecipesScreen items={items}/>}
       {tab === 'profile' && <ProfileScreen/>}
 
@@ -316,7 +317,7 @@ function LoginScreen({onLogin}) {
 }
 
 // ─── HOME SCREEN ──────────────────────────────────────────────────────────────
-function HomeScreen({items, expiring, onNav, onScan}) {
+function HomeScreen({items, expiring, onNav, onScan, onUrgent}) {
   return (
     <ScrollView style={styles.screen} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
@@ -334,7 +335,7 @@ function HomeScreen({items, expiring, onNav, onScan}) {
           <Text style={styles.heroTitle}>
             {expiring.length} produit{expiring.length>1?'s':''}{'\n'}à consommer{'\n'}cette semaine
           </Text>
-          <TouchableOpacity style={styles.heroBtn} onPress={() => onNav('fridge')}>
+          <TouchableOpacity style={styles.heroBtn} onPress={onUrgent}>
             <Text style={{fontWeight:'700',color:C.t1,fontSize:13}}>Voir la liste</Text>
           </TouchableOpacity>
         </View>
@@ -405,12 +406,97 @@ function HomeScreen({items, expiring, onNav, onScan}) {
 }
 
 // ─── FRIDGE SCREEN ────────────────────────────────────────────────────────────
-function FridgeScreen({items, setItems, user}) {
+function FridgeScreen({items, setItems, user, urgentMode, onExitUrgent}) {
   const [loc, setLoc] = useState('Frigo');
   const [q, setQ] = useState('');
+
+  const urgent = items.filter(i => i.days <= 4).sort((a,b) => a.days - b.days);
+  const rest = items.filter(i => i.days > 4).sort((a,b) => a.days - b.days);
   const shown = items
     .filter(i => i.location === loc && (!q || i.name.toLowerCase().includes(q.toLowerCase())))
     .sort((a,b) => a.days - b.days);
+
+  const ProductRow = ({item}) => (
+    <TouchableOpacity style={[styles.fridgeRow, {marginBottom:9}]}
+      onLongPress={() => {
+        Alert.alert('Supprimer ?', `Retirer ${item.name} du frigo ?`, [
+          {text:'Annuler', style:'cancel'},
+          {text:'Supprimer', style:'destructive', onPress: async () => {
+            setItems(p => p.filter(x => x.id !== item.id));
+            await supabase.from('items').delete().eq('id', item.id);
+          }}
+        ]);
+      }}>
+      <Text style={{fontSize:36,marginRight:12}}>{item.emoji}</Text>
+      <View style={{flex:1}}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productSub}>{item.brand||item.category} · {item.location}</Text>
+        <View style={{height:3,backgroundColor:'#EAECEF',borderRadius:2,marginTop:6,overflow:'hidden'}}>
+          <View style={{height:'100%',backgroundColor:urgBg(item.days),
+            width:`${Math.min(item.days/14,1)*100}%`,borderRadius:2}}/>
+        </View>
+      </View>
+      <View style={{alignItems:'flex-end',gap:6}}>
+        <View style={[styles.urgBadge, {backgroundColor:urgBg(item.days)}]}>
+          <Text style={styles.urgText}>{urgLbl(item.days)}</Text>
+        </View>
+        {item.nutri_grade && (
+          <View style={{width:22,height:22,borderRadius:6,backgroundColor:'#34C759',alignItems:'center',justifyContent:'center'}}>
+            <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri_grade}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (urgentMode) return (
+    <View style={styles.screen}>
+      <View style={{padding:16}}>
+        <TouchableOpacity onPress={onExitUrgent} style={{flexDirection:'row',alignItems:'center',marginBottom:14}}>
+          <Text style={{fontSize:14,color:C.green,fontWeight:'600'}}>← Vue par emplacement</Text>
+        </TouchableOpacity>
+        <Text style={styles.screenTitle}>Priorités</Text>
+        <View style={styles.searchBar}>
+          <Text style={{fontSize:16,marginRight:8}}>🔍</Text>
+          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher…"
+            style={{flex:1,fontSize:14,color:C.t1}} placeholderTextColor={C.t4}/>
+        </View>
+      </View>
+      <ScrollView style={{flex:1,paddingHorizontal:16}}>
+        {urgent.length > 0 && (
+          <>
+            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10}}>
+              <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
+              <Text style={{fontSize:11,fontWeight:'700',color:C.red}}>⚠️ À CONSOMMER EN PRIORITÉ ({urgent.length})</Text>
+              <View style={{flex:1,height:1,backgroundColor:C.red+'30'}}/>
+            </View>
+            {urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => (
+              <ProductRow key={item.id} item={item}/>
+            ))}
+          </>
+        )}
+        {rest.length > 0 && (
+          <>
+            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginVertical:14}}>
+              <View style={{flex:1,height:1,backgroundColor:C.border}}/>
+              <Text style={{fontSize:11,fontWeight:'700',color:C.t3}}>📦 LE RESTE DU STOCK ({rest.length})</Text>
+              <View style={{flex:1,height:1,backgroundColor:C.border}}/>
+            </View>
+            {rest.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => (
+              <ProductRow key={item.id} item={item}/>
+            ))}
+          </>
+        )}
+        {items.length === 0 && (
+          <View style={{alignItems:'center',paddingTop:60}}>
+            <Text style={{fontSize:52,marginBottom:12}}>📭</Text>
+            <Text style={{fontSize:15,fontWeight:'600',color:C.t2}}>Frigo vide</Text>
+          </View>
+        )}
+        <View style={{height:20}}/>
+      </ScrollView>
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
@@ -421,7 +507,7 @@ function FridgeScreen({items, setItems, user}) {
             const cnt = items.filter(i => i.location === l.id).length;
             const on = loc === l.id;
             return (
-              <TouchableOpacity key={l.id} onPress={() => setLoc(l.id)}
+              <TouchableOpacity key={l.id} onPress={() => { setLoc(l.id); onExitUrgent?.(); }}
                 style={[styles.locTab, on && styles.locTabActive]}>
                 <Text style={{fontSize:22,marginBottom:4}}>{l.icon}</Text>
                 <Text style={[styles.locTabLabel, on && {color:C.t1,fontWeight:'700'}]}>{l.id}</Text>
@@ -444,38 +530,7 @@ function FridgeScreen({items, setItems, user}) {
             <Text style={{fontSize:13,color:C.t3,marginTop:4}}>Scanne tes courses pour commencer</Text>
           </View>
         )}
-        {shown.map((item) => (
-          <TouchableOpacity key={item.id} style={[styles.fridgeRow, {marginBottom:9}]}
-            onLongPress={() => {
-              Alert.alert('Supprimer ?', `Retirer ${item.name} du frigo ?`, [
-                {text:'Annuler', style:'cancel'},
-                {text:'Supprimer', style:'destructive', onPress: async () => {
-                  setItems(p => p.filter(x => x.id !== item.id));
-                  await supabase.from('items').delete().eq('id', item.id);
-                }}
-              ]);
-            }}>
-            <Text style={{fontSize:36,marginRight:12}}>{item.emoji}</Text>
-            <View style={{flex:1}}>
-              <Text style={styles.productName}>{item.name}</Text>
-              <Text style={styles.productSub}>{item.brand||item.category} · {item.quantity} {item.unit}</Text>
-              <View style={{height:3,backgroundColor:'#EAECEF',borderRadius:2,marginTop:6,overflow:'hidden'}}>
-                <View style={{height:'100%',backgroundColor:urgBg(item.days),
-                  width:`${Math.min(item.days/14,1)*100}%`,borderRadius:2}}/>
-              </View>
-            </View>
-            <View style={{alignItems:'flex-end',gap:6}}>
-              <View style={[styles.urgBadge, {backgroundColor:urgBg(item.days)}]}>
-                <Text style={styles.urgText}>{urgLbl(item.days)}</Text>
-              </View>
-              {item.nutri_grade && (
-                <View style={{width:22,height:22,borderRadius:6,backgroundColor:'#34C759',alignItems:'center',justifyContent:'center'}}>
-                  <Text style={{fontSize:10,fontWeight:'700',color:'#fff'}}>{item.nutri_grade}</Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        ))}
+        {shown.map(item => <ProductRow key={item.id} item={item}/>)}
         <View style={{height:20}}/>
       </ScrollView>
     </View>
@@ -484,34 +539,100 @@ function FridgeScreen({items, setItems, user}) {
 
 // ─── RECIPES SCREEN ───────────────────────────────────────────────────────────
 function RecipesScreen({items}) {
-  const recipes = [
-    {name:'Gâteau moelleux aux pommes', time:'20 min', diff:'Facile', emoji:'🍰', saves:'4,20'},
-    {name:'Pâtes crémeuses champignons', time:'25 min', diff:'Facile', emoji:'🍝', saves:'5,80'},
-    {name:'Saumon à l\'aneth', time:'15 min', diff:'Facile', emoji:'🐟', saves:'6,40'},
-    {name:'Smoothie fraises-banane', time:'5 min', diff:'Très facile', emoji:'🍓', saves:'2,50'},
-  ];
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const expiring = items.filter(i => i.days <= 7).sort((a,b) => a.days - b.days);
+  const forRecipes = expiring.length >= 2 ? expiring : items.slice(0, 5);
+
+  const loadRecipes = async () => {
+    if (!forRecipes.length) return;
+    setLoading(true);
+    try {
+      const res = await fetch(RECIPES_FN_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}`},
+        body: JSON.stringify({
+          products: forRecipes.map(p => ({name: p.name, emoji: p.emoji, days_left: p.days_left ?? p.days, category: p.category}))
+        }),
+      });
+      const data = await res.json();
+      setRecipes(data.recipes || []);
+    } catch { /* keep empty */ }
+    setLoading(false);
+    setLoaded(true);
+  };
+
+  useEffect(() => { loadRecipes(); }, [items.length]);
+
   return (
     <ScrollView style={styles.screen} showsVerticalScrollIndicator={false}>
       <View style={{padding:16}}>
-        <Text style={styles.screenTitle}>Recettes pour toi</Text>
-        <Text style={{fontSize:13,color:C.t3,marginBottom:16}}>Basées sur tes produits</Text>
-        {recipes.map((r,i) => (
-          <TouchableOpacity key={i} style={[styles.card, {marginBottom:12,overflow:'hidden'}]}>
-            <View style={{height:120,backgroundColor:'#F0FFF4',alignItems:'center',justifyContent:'center'}}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+          <Text style={styles.screenTitle}>Recettes pour toi</Text>
+          {loaded && (
+            <TouchableOpacity onPress={loadRecipes} disabled={loading}
+              style={{paddingHorizontal:12,paddingVertical:6,backgroundColor:`${C.green}15`,borderRadius:100}}>
+              <Text style={{fontSize:12,color:C.green,fontWeight:'600'}}>🔄 Rafraîchir</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {expiring.length > 0 && (
+          <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:16}}>
+            {expiring.slice(0,4).map(p => (
+              <View key={p.id} style={{paddingHorizontal:10,paddingVertical:4,
+                backgroundColor:urgBg(p.days)+'20',borderRadius:100,flexDirection:'row',gap:4,alignItems:'center'}}>
+                <Text style={{fontSize:11}}>{p.emoji}</Text>
+                <Text style={{fontSize:11,color:urgBg(p.days),fontWeight:'600'}}>J-{p.days}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {loading && (
+          <View style={{alignItems:'center',paddingVertical:40}}>
+            <ActivityIndicator color={C.green} size="large"/>
+            <Text style={{marginTop:14,fontSize:14,color:C.t3}}>Claude génère tes recettes…</Text>
+          </View>
+        )}
+
+        {!loading && recipes.length === 0 && loaded && (
+          <View style={{alignItems:'center',paddingVertical:40}}>
+            <Text style={{fontSize:52,marginBottom:12}}>🍽️</Text>
+            <Text style={{fontSize:15,fontWeight:'600',color:C.t2}}>Pas assez de produits</Text>
+            <Text style={{fontSize:13,color:C.t3,marginTop:4,textAlign:'center'}}>Scanne des courses pour obtenir des suggestions</Text>
+          </View>
+        )}
+
+        {!loading && recipes.map((r,i) => (
+          <View key={i} style={[styles.card, {marginBottom:12,overflow:'hidden'}]}>
+            <View style={{height:110,backgroundColor:'#F0FFF4',alignItems:'center',justifyContent:'center'}}>
               <Text style={{fontSize:56}}>{r.emoji}</Text>
             </View>
             <View style={{padding:14}}>
-              <Text style={{fontSize:16,fontWeight:'700',color:C.t1,marginBottom:4}}>{r.name}</Text>
-              <View style={{flexDirection:'row',gap:8}}>
+              <Text style={{fontSize:16,fontWeight:'700',color:C.t1,marginBottom:6}}>{r.name}</Text>
+              {r.desc && <Text style={{fontSize:12,color:C.t3,marginBottom:8}}>{r.desc}</Text>}
+              {r.ingredients?.length > 0 && (
+                <Text style={{fontSize:11,color:C.t2,marginBottom:8}}>
+                  {r.ingredients.join(' · ')}
+                </Text>
+              )}
+              <View style={{flexDirection:'row',gap:8,flexWrap:'wrap'}}>
                 <View style={{paddingHorizontal:10,paddingVertical:4,backgroundColor:`${C.green}18`,borderRadius:100}}>
-                  <Text style={{fontSize:11,color:C.green,fontWeight:'600'}}>{r.time}</Text>
+                  <Text style={{fontSize:11,color:C.green,fontWeight:'600'}}>⏱ {r.time}</Text>
                 </View>
-                <View style={{paddingHorizontal:10,paddingVertical:4,backgroundColor:'#FFF9E6',borderRadius:100}}>
-                  <Text style={{fontSize:11,color:'#8B6914',fontWeight:'600'}}>−{r.saves}€</Text>
+                <View style={{paddingHorizontal:10,paddingVertical:4,backgroundColor:'#F5F5F5',borderRadius:100}}>
+                  <Text style={{fontSize:11,color:C.t3,fontWeight:'600'}}>{r.diff}</Text>
                 </View>
+                {r.saves && (
+                  <View style={{paddingHorizontal:10,paddingVertical:4,backgroundColor:'#FFF9E6',borderRadius:100}}>
+                    <Text style={{fontSize:11,color:'#8B6914',fontWeight:'600'}}>−{r.saves}€</Text>
+                  </View>
+                )}
               </View>
             </View>
-          </TouchableOpacity>
+          </View>
         ))}
       </View>
     </ScrollView>
@@ -571,6 +692,7 @@ function ProfileScreen() {
 
 // ─── SCAN SCREEN ──────────────────────────────────────────────────────────────
 const EDGE_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/analyze-photo';
+const RECIPES_FN_URL = 'https://mswmridpidhqqlxnxhlt.supabase.co/functions/v1/suggest-recipes';
 
 function ScanScreen({onClose, setItems, user, familyId}) {
   const [mode, setMode] = useState('choice');
