@@ -18,8 +18,8 @@ serve(async (req) => {
     }
 
     const productList = products
-      .map((p: { emoji: string; name: string; days_left: number }) =>
-        `- ${p.emoji} ${p.name}${p.days_left <= 4 ? ` (J-${p.days_left}, URGENT)` : ` (J-${p.days_left})`}`
+      .map((p: { emoji: string; name: string; days_left: number; location?: string }) =>
+        `- ${p.emoji} ${p.name}${p.days_left <= 4 ? ` (J-${p.days_left}, URGENT)` : ` (J-${p.days_left})`}${p.location ? ` [${p.location}]` : ''}`
       )
       .join('\n')
 
@@ -32,7 +32,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: [{
           role: 'user',
           content: `Tu es un chef cuisinier anti-gaspillage. Voici les produits disponibles :
@@ -45,9 +45,11 @@ Pour chaque recette retourne :
 - emoji: emoji représentatif
 - time: temps de préparation (ex: "20 min")
 - diff: "Très facile", "Facile" ou "Moyen"
-- ingredients: tableau des noms exacts des produits utilisés de la liste
+- ingredients: tableau des noms courts et propres des produits utilisés (sans mention J-1, URGENT ou localisation — juste le nom du produit)
 - desc: description courte (1 phrase max)
 - saves: économie estimée en euros (ex: "4,50")
+- steps: tableau de 4 à 7 étapes de préparation numérotées, claires et précises en français (ex: ["Épluche et coupe les pommes de terre en rondelles fines.", "Fais chauffer la crème avec l'ail dans une casserole.", ...])
+- imageQuery: courte requête en anglais pour trouver une photo de cette recette sur Spoonacular (ex: "cheese pasta sauce", "potato gratin", "chicken stir fry")
 
 Réponds UNIQUEMENT avec un JSON array valide, sans markdown ni texte autour. Si impossible : []`,
         }],

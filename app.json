@@ -2,28 +2,29 @@
   "expo": {
     "name": "Frigy",
     "slug": "frigy-mobile",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F0F2F5"
+      "backgroundColor": "#FAF8F0"
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.frigy.app",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationCategoryType": "public.app-category.food-and-drink"
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#F0F2F5"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FAF8F0"
       },
       "package": "com.frigy.app",
       "edgeToEdgeEnabled": true,
@@ -32,10 +33,18 @@
       ]
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-camera"
+      "expo-camera",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2ECC71",
+          "sounds": []
+        }
+      ]
     ],
     "extra": {
       "eas": {
