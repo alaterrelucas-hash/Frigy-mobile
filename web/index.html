@@ -10,9 +10,10 @@
   <meta property="og:image" content="https://frigy.app/assets/icon.png">
   <meta property="og:url" content="https://frigy.app">
   <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://frigy.app/assets/icon.png">
   <link rel="canonical" href="https://frigy.app">
+  <link rel="icon" type="image/png" href="/assets/icon.png">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -24,6 +25,7 @@
       --t2: #3A3A3C;
       --t3: #8E8E93;
       --card: #FFFFFF;
+      --r: 28px;
     }
 
     body {
@@ -31,14 +33,16 @@
       background: var(--bg);
       color: var(--t1);
       line-height: 1.6;
+      overflow-x: hidden;
     }
 
     /* NAV */
     nav {
-      background: rgba(247,247,240,0.92);
-      backdrop-filter: blur(12px);
+      background: rgba(247,247,240,0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid rgba(0,0,0,0.06);
-      padding: 0 24px;
+      padding: 0 32px;
       height: 64px;
       display: flex;
       align-items: center;
@@ -54,24 +58,30 @@
       background: var(--green);
       color: #fff;
       text-decoration: none;
-      padding: 9px 18px;
+      padding: 9px 20px;
       border-radius: 100px;
       font-size: 14px;
       font-weight: 700;
+      transition: background 0.2s, transform 0.15s;
     }
+    .nav-cta:hover { background: var(--green-dk); transform: translateY(-1px); }
 
     /* HERO */
-    .hero {
-      max-width: 760px;
+    .hero-wrap {
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 80px 24px 64px;
-      text-align: center;
+      padding: 80px 32px 72px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 56px;
+      align-items: center;
     }
+
     .hero-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(61,179,63,0.12);
+      background: rgba(61,179,63,0.1);
       color: var(--green-dk);
       font-size: 13px;
       font-weight: 700;
@@ -79,168 +89,375 @@
       border-radius: 100px;
       margin-bottom: 24px;
     }
+
     .hero h1 {
-      font-size: clamp(36px, 6vw, 60px);
+      font-size: clamp(42px, 5.5vw, 68px);
       font-weight: 900;
-      letter-spacing: -2px;
-      line-height: 1.05;
+      letter-spacing: -3px;
+      line-height: 1.0;
       color: var(--t1);
-      margin-bottom: 20px;
+      margin-bottom: 22px;
     }
-    .hero h1 span { color: var(--green); }
+    .hero h1 .accent { color: var(--green); }
+
     .hero p {
-      font-size: 18px;
+      font-size: 17px;
       color: var(--t3);
-      max-width: 520px;
-      margin: 0 auto 36px;
-      line-height: 1.6;
+      line-height: 1.7;
+      max-width: 420px;
+      margin-bottom: 36px;
     }
-    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-    .btn-primary {
+
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    .btn-dark {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       background: var(--t1);
       color: #fff;
       text-decoration: none;
-      padding: 14px 24px;
+      padding: 15px 24px;
       border-radius: 14px;
       font-size: 15px;
       font-weight: 700;
+      transition: opacity 0.15s, transform 0.15s;
     }
-    .btn-primary svg { width: 20px; height: 20px; fill: #fff; }
-    .btn-secondary {
+    .btn-dark:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-dark svg { width: 20px; height: 20px; fill: #fff; flex-shrink: 0; }
+
+    .btn-ghost {
       display: inline-flex;
       align-items: center;
       background: var(--card);
-      color: var(--t1);
+      color: var(--t2);
       text-decoration: none;
-      padding: 14px 24px;
+      padding: 15px 24px;
       border-radius: 14px;
       font-size: 15px;
       font-weight: 600;
-      border: 1.5px solid rgba(0,0,0,0.08);
+      border: 1.5px solid rgba(0,0,0,0.09);
+      transition: border-color 0.2s;
     }
+    .btn-ghost:hover { border-color: rgba(0,0,0,0.22); }
 
-    /* STATS */
-    .stats {
+    .hero-social {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--t3);
+    }
+    .stars { color: #FFB800; letter-spacing: -2px; font-size: 15px; }
+
+    /* PHONE MOCKUP */
+    .phone-wrap {
       display: flex;
       justify-content: center;
-      gap: 40px;
-      flex-wrap: wrap;
-      padding: 0 24px 64px;
-      max-width: 760px;
+      align-items: center;
+      position: relative;
+      padding: 40px;
+    }
+
+    .phone {
+      width: 248px;
+      height: 500px;
+      background: var(--t1);
+      border-radius: 48px;
+      border: 10px solid #111;
+      box-shadow:
+        0 60px 100px rgba(0,0,0,0.22),
+        0 24px 48px rgba(0,0,0,0.14),
+        inset 0 0 0 1.5px rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 88px;
+      height: 26px;
+      background: #111;
+      border-radius: 13px;
+      z-index: 10;
+    }
+
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(170deg, #edfaed 0%, #d4f0d4 40%, #f0f9e8 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 20px;
+    }
+
+    .phone-app-icon {
+      width: 96px;
+      height: 96px;
+      border-radius: 24px;
+      box-shadow: 0 16px 40px rgba(61,179,63,0.35);
+    }
+
+    .phone-label {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--t1);
+      letter-spacing: -0.3px;
+    }
+
+    .phone-sublabel {
+      font-size: 12px;
+      color: var(--t3);
+    }
+
+    /* Floating pills */
+    .pill {
+      position: absolute;
+      background: white;
+      border-radius: 100px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--t1);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+      white-space: nowrap;
+    }
+    .pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+    .pill-dot.red { background: #FF3B30; }
+    .pill-dot.orange { background: #FF9500; }
+
+    .pill-1 { top: 30px; right: 0; }
+    .pill-2 { top: 140px; right: -10px; }
+    .pill-3 { bottom: 140px; right: -5px; }
+    .pill-4 { top: 190px; left: 0; }
+    .pill-5 { bottom: 80px; left: -5px; }
+
+    /* STATS */
+    .stats-bar { background: var(--t1); padding: 44px 32px; }
+    .stats-inner {
+      max-width: 1100px;
       margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
     }
     .stat { text-align: center; }
-    .stat-value { font-size: 36px; font-weight: 900; color: var(--green); letter-spacing: -1.5px; }
-    .stat-label { font-size: 13px; color: var(--t3); margin-top: 2px; }
+    .stat-val {
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--green);
+      letter-spacing: -3px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-lbl { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.5; }
 
-    /* FEATURES */
-    .section { max-width: 900px; margin: 0 auto; padding: 0 24px 80px; }
-    .section-label {
+    /* BENTO */
+    .bento-section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 32px 72px;
+    }
+    .section-eyebrow {
       font-size: 11px;
       font-weight: 800;
       color: var(--green);
-      letter-spacing: 1.2px;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
       margin-bottom: 12px;
     }
-    .section h2 {
-      font-size: clamp(28px, 4vw, 40px);
+    .section-title {
+      font-size: clamp(28px, 4vw, 44px);
       font-weight: 900;
       letter-spacing: -1.5px;
       color: var(--t1);
-      margin-bottom: 48px;
+      margin-bottom: 40px;
+      line-height: 1.1;
     }
 
-    .features-grid {
+    .bento {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
     }
-    .feature-card {
+
+    .card {
       background: var(--card);
-      border-radius: 24px;
-      padding: 28px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      border-radius: var(--r);
+      padding: 32px;
+      overflow: hidden;
+      position: relative;
     }
-    .feature-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 16px;
-      background: rgba(61,179,63,0.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-      margin-bottom: 16px;
-    }
-    .feature-card h3 {
-      font-size: 17px;
+    .card.wide { grid-column: span 2; }
+    .card.dark { background: var(--t1); }
+    .card.green { background: var(--green); }
+    .card.lime { background: #F0FFF0; }
+
+    .card-icon { font-size: 42px; margin-bottom: 16px; display: block; line-height: 1; }
+
+    .card h3 {
+      font-size: 19px;
       font-weight: 800;
-      color: var(--t1);
+      letter-spacing: -0.4px;
       margin-bottom: 8px;
-      letter-spacing: -0.3px;
+      color: var(--t1);
     }
-    .feature-card p {
+    .card.dark h3, .card.green h3 { color: #fff; }
+
+    .card p {
       font-size: 14px;
       color: var(--t3);
-      line-height: 1.6;
+      line-height: 1.65;
     }
+    .card.dark p { color: rgba(255,255,255,0.5); }
+    .card.green p { color: rgba(255,255,255,0.75); }
 
-    /* CTA BANNER */
-    .cta-banner {
-      background: var(--green);
-      margin: 0 24px 80px;
-      border-radius: 28px;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 852px;
-      margin-left: auto;
-      margin-right: auto;
+    .big-num {
+      font-size: 80px;
+      font-weight: 900;
+      letter-spacing: -5px;
+      line-height: 1;
+      margin-top: 12px;
     }
-    .cta-banner h2 {
-      font-size: clamp(26px, 4vw, 36px);
+    .card.dark .big-num { color: var(--green); }
+    .card.green .big-num { color: rgba(255,255,255,0.9); }
+    .card.lime .big-num { color: var(--green); }
+
+    /* Photo cards */
+    .card.photo {
+      background-size: cover;
+      background-position: center;
+      min-height: 240px;
+    }
+    .card.photo::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+      border-radius: var(--r);
+    }
+    .card.photo h3, .card.photo p { position: relative; z-index: 1; color: #fff; }
+    .card.photo p { color: rgba(255,255,255,0.8); }
+    .card.photo .card-icon { position: relative; z-index: 1; }
+
+    /* CTA */
+    .cta-section { padding: 0 32px 80px; }
+    .cta-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--green);
+      border-radius: 32px;
+      padding: 72px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-inner::before {
+      content: '';
+      position: absolute;
+      top: -80px; right: -80px;
+      width: 280px; height: 280px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .cta-inner::after {
+      content: '';
+      position: absolute;
+      bottom: -100px; left: -60px;
+      width: 260px; height: 260px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 50%;
+    }
+    .cta-inner h2 {
+      font-size: clamp(28px, 4vw, 44px);
       font-weight: 900;
       color: #fff;
-      letter-spacing: -1px;
-      margin-bottom: 12px;
+      letter-spacing: -1.5px;
+      margin-bottom: 14px;
+      position: relative;
+      z-index: 1;
     }
-    .cta-banner p {
+    .cta-inner p {
       color: rgba(255,255,255,0.8);
-      font-size: 16px;
-      margin-bottom: 28px;
+      font-size: 17px;
+      margin-bottom: 36px;
+      position: relative;
+      z-index: 1;
     }
-    .cta-banner .btn-white {
+    .btn-white {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       background: #fff;
       color: var(--green-dk);
       text-decoration: none;
-      padding: 14px 28px;
+      padding: 16px 32px;
       border-radius: 100px;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 800;
+      position: relative;
+      z-index: 1;
+      transition: transform 0.15s, box-shadow 0.15s;
     }
+    .btn-white:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.15); }
+    .btn-white svg { width: 20px; height: 20px; fill: var(--green-dk); flex-shrink: 0; }
 
     /* FOOTER */
-    footer {
-      border-top: 1px solid rgba(0,0,0,0.06);
-      padding: 32px 24px;
+    footer { border-top: 1px solid rgba(0,0,0,0.07); padding: 36px 32px; }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 16px;
-      max-width: 900px;
-      margin: 0 auto;
     }
     footer p { font-size: 13px; color: var(--t3); }
-    .footer-links { display: flex; gap: 20px; }
+    .footer-links { display: flex; gap: 24px; }
     .footer-links a { font-size: 13px; color: var(--t3); text-decoration: none; }
     .footer-links a:hover { color: var(--t1); }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      nav { padding: 0 20px; }
+
+      .hero-wrap {
+        grid-template-columns: 1fr;
+        padding: 48px 20px 60px;
+        gap: 48px;
+        text-align: center;
+      }
+      .hero p { max-width: none; }
+      .hero-actions { justify-content: center; }
+      .hero-social { justify-content: center; }
+      .phone-wrap { order: -1; padding: 24px; }
+      .pill { display: none; }
+
+      .stats-inner { grid-template-columns: 1fr; gap: 24px; }
+      .stat-val { font-size: 40px; }
+
+      .bento-section { padding: 48px 20px 60px; }
+      .bento { grid-template-columns: 1fr; }
+      .card.wide { grid-column: span 1; }
+
+      .cta-section { padding: 0 20px 60px; }
+      .cta-inner { padding: 48px 28px; }
+
+      footer { padding: 28px 20px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+    }
   </style>
 </head>
 <body>
@@ -254,88 +471,138 @@
   </nav>
 
   <!-- HERO -->
-  <section class="hero">
-    <div class="hero-badge">🌱 Anti-gaspillage alimentaire</div>
-    <h1>Finis le<br><span>gaspillage</span> alimentaire</h1>
-    <p>Frigy scanne tes courses, suit tes dates de péremption et te suggère des recettes avec ce que tu as déjà dans ton frigo.</p>
-    <div class="hero-actions">
-      <a class="btn-primary" href="https://apps.apple.com/app/frigy/id6768930083">
-        <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-        App Store
-      </a>
-      <a class="btn-secondary" href="/support">Centre d'aide →</a>
+  <div class="hero-wrap">
+    <div class="hero">
+      <div class="hero-badge">🌱 Anti-gaspillage alimentaire</div>
+      <h1>Finis le<br><span class="accent">gaspillage</span><br>alimentaire</h1>
+      <p>Frigy scanne tes courses, suit tes dates de péremption et te propose des recettes avec ce que tu as déjà dans ton frigo.</p>
+      <div class="hero-actions">
+        <a class="btn-dark" href="https://apps.apple.com/app/frigy/id6768930083">
+          <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          App Store
+        </a>
+        <a class="btn-ghost" href="/support">Centre d'aide →</a>
+      </div>
+      <div class="hero-social">
+        <span class="stars">★★★★★</span>
+        <span>Disponible sur l'App Store</span>
+      </div>
     </div>
-  </section>
 
-  <!-- STATS -->
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-value">30€</div>
-      <div class="stat-label">économisés par mois en moyenne</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">-75%</div>
-      <div class="stat-label">de gaspillage alimentaire</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">0,75kg</div>
-      <div class="stat-label">de CO₂ évité par produit sauvé</div>
+    <div class="phone-wrap">
+      <div class="pill pill-1"><span class="pill-dot red"></span>Tomates — expire demain</div>
+      <div class="pill pill-2">📋 Recette générée ✓</div>
+      <div class="pill pill-3"><span class="pill-dot"></span>0,75 kg CO₂ évité</div>
+      <div class="pill pill-4"><span class="pill-dot orange"></span>DLC dans 3 jours</div>
+      <div class="pill pill-5">🛒 Liste de courses</div>
+
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <img class="phone-app-icon" src="/assets/icon.png" alt="Frigy">
+          <div class="phone-label">Frigy</div>
+          <div class="phone-sublabel">Anti-gaspillage</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- FEATURES -->
-  <section class="section">
-    <div class="section-label">Fonctionnalités</div>
-    <h2>Tout ce dont tu as besoin<br>pour ne plus rien jeter</h2>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">📷</div>
-        <h3>Scan ultra-rapide</h3>
-        <p>Scanne le code-barres de tes produits ou prends en photo ton ticket de caisse — Frigy enregistre tout automatiquement.</p>
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stats-inner">
+      <div class="stat">
+        <div class="stat-val">30€</div>
+        <div class="stat-lbl">économisés<br>par mois en moyenne</div>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">📅</div>
-        <h3>Alertes DLC</h3>
-        <p>Reçois des notifications avant que tes produits expirent. Ne rate plus jamais une date de péremption.</p>
+      <div class="stat">
+        <div class="stat-val">−75%</div>
+        <div class="stat-lbl">de gaspillage<br>alimentaire</div>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">👨‍🍳</div>
-        <h3>Recettes anti-gaspillage</h3>
-        <p>Frigy génère des recettes personnalisées avec ce que tu as dans ton frigo, en priorisant les produits qui vont bientôt expirer.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🛒</div>
-        <h3>Liste de courses</h3>
-        <p>Crée et gère ta liste de courses directement dans l'app. Coche les articles en magasin en temps réel.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <h3>Suivi de ton impact</h3>
-        <p>Visualise tes économies, ton CO₂ évité et ton score anti-gaspillage semaine après semaine.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">👨‍👩‍👧</div>
-        <h3>Partage en famille</h3>
-        <p>Partage ton stock avec toute la famille. Un frigo partagé, zéro doublon, zéro gaspillage.</p>
+      <div class="stat">
+        <div class="stat-val">0,75kg</div>
+        <div class="stat-lbl">de CO₂ évité<br>par produit sauvé</div>
       </div>
     </div>
-  </section>
+  </div>
+
+  <!-- BENTO -->
+  <div class="bento-section">
+    <div class="section-eyebrow">Fonctionnalités</div>
+    <div class="section-title">Tout ce qu'il te faut<br>pour ne plus rien jeter</div>
+
+    <div class="bento">
+
+      <!-- Row 1 -->
+      <div class="card wide photo" style="background-image: url('https://images.unsplash.com/photo-1542838132-92c53300491e?w=1000&q=80')">
+        <span class="card-icon">📷</span>
+        <h3>Scan ultra-rapide</h3>
+        <p>Scanne le code-barres ou prends en photo ton ticket de caisse — Frigy enregistre tout automatiquement.</p>
+        <div class="big-num" style="color:rgba(255,255,255,0.9);font-size:56px;margin-top:16px;">2 sec</div>
+      </div>
+
+      <div class="card lime">
+        <span class="card-icon">📅</span>
+        <h3>Alertes DLC</h3>
+        <p>Notification avant chaque expiration. Tu ne jettes plus rien par oubli.</p>
+        <div class="big-num">0<br><span style="font-size:22px;letter-spacing:-1px;font-weight:800;">oubli</span></div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="card photo" style="background-image: url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80'); min-height:280px;">
+        <span class="card-icon">👨‍🍳</span>
+        <h3>Recettes anti-gaspillage</h3>
+        <p>Générées avec ce que tu as, en priorité sur ce qui expire bientôt.</p>
+      </div>
+
+      <div class="card wide green">
+        <span class="card-icon">📊</span>
+        <h3>Suivi de ton impact</h3>
+        <p>Économies, CO₂ évité, score anti-gaspillage — semaine après semaine.</p>
+        <div class="big-num">+30€<br><span style="font-size:18px;letter-spacing:-0.5px;font-weight:700;opacity:0.85;">par mois en moyenne</span></div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="card">
+        <span class="card-icon">🛒</span>
+        <h3>Liste de courses</h3>
+        <p>Crée ta liste dans l'app et coche en temps réel en magasin.</p>
+      </div>
+
+      <div class="card dark">
+        <span class="card-icon">👨‍👩‍👧</span>
+        <h3>Partage en famille</h3>
+        <p>Un frigo partagé avec toute la famille. Zéro doublon, zéro gaspillage.</p>
+      </div>
+
+      <div class="card dark">
+        <span class="card-icon">🆓</span>
+        <h3>100% gratuit</h3>
+        <p>Aucun abonnement, aucun frais caché. Télécharge et utilise.</p>
+      </div>
+
+    </div>
+  </div>
 
   <!-- CTA -->
-  <div class="cta-banner">
-    <h2>Prêt à sauver ton frigo ?</h2>
-    <p>Télécharge Frigy gratuitement et commence à économiser dès aujourd'hui.</p>
-    <a class="btn-white" href="https://apps.apple.com/app/frigy/id6768930083">
-      Télécharger gratuitement
-    </a>
+  <div class="cta-section">
+    <div class="cta-inner">
+      <h2>Prêt à sauver ton frigo ?</h2>
+      <p>Télécharge Frigy gratuitement et commence à économiser dès aujourd'hui.</p>
+      <a class="btn-white" href="https://apps.apple.com/app/frigy/id6768930083">
+        <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Télécharger gratuitement
+      </a>
+    </div>
   </div>
 
   <footer>
-    <p>© 2026 Frigy. Tous droits réservés.</p>
-    <div class="footer-links">
-      <a href="/privacy">Confidentialité</a>
-      <a href="/cgv">CGV</a>
-      <a href="/support">Support</a>
+    <div class="footer-inner">
+      <p>© 2026 Frigy. Tous droits réservés.</p>
+      <div class="footer-links">
+        <a href="/privacy">Confidentialité</a>
+        <a href="/cgv">CGV</a>
+        <a href="/support">Support</a>
+      </div>
     </div>
   </footer>
 

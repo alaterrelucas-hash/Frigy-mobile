@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politique de confidentialité — Frigy</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #3DB33F;
+      --green-dk: #2E8A30;
+      --bg: #F7F7F0;
+      --t1: #1C1C1E;
+      --t2: #3A3A3C;
+      --t3: #8E8E93;
+      --card: #FFFFFF;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--t1);
+      line-height: 1.7;
+    }
+    nav {
+      background: rgba(247,247,240,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { height: 36px; width: 36px; border-radius: 10px; }
+    .nav-logo span { font-size: 20px; font-weight: 900; color: var(--t1); letter-spacing: -0.5px; }
+    .nav-back {
+      font-size: 14px;
+      color: var(--t3);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-back:hover { color: var(--t1); }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 56px 32px 100px;
+    }
+
+    .page-header {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .badge {
+      display: inline-flex;
+      background: rgba(61,179,63,0.1);
+      color: var(--green-dk);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: 100px;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      color: var(--t1);
+      margin-bottom: 8px;
+    }
+    .date { font-size: 14px; color: var(--t3); }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--t1);
+      margin: 40px 0 12px;
+    }
+    p { font-size: 15px; color: var(--t2); margin-bottom: 12px; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    li { font-size: 15px; color: var(--t2); margin-bottom: 6px; line-height: 1.6; }
+    a { color: var(--green-dk); }
+    strong { color: var(--t1); }
+
+    .infobox {
+      background: rgba(61,179,63,0.07);
+      border-left: 3px solid var(--green);
+      border-radius: 0 12px 12px 0;
+      padding: 16px 20px;
+      margin: 0 0 32px;
+      font-size: 14px;
+      color: var(--t2);
+      line-height: 1.6;
+    }
+
+    footer { border-top: 1px solid rgba(0,0,0,0.07); padding: 28px 32px; }
+    .footer-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer p { font-size: 13px; color: var(--t3); margin-bottom: 0; }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { font-size: 13px; color: var(--t3); text-decoration: none; }
+    .footer-links a:hover { color: var(--t1); }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 20px; }
+      .wrap { padding: 36px 20px 80px; }
+      h1 { font-size: 28px; }
+      footer { padding: 24px 20px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/">
+      <img src="/assets/icon.png" alt="Frigy">
+      <span>Frigy</span>
+    </a>
+    <a class="nav-back" href="/">← Accueil</a>
+  </nav>
+
+  <div class="wrap">
+    <div class="page-header">
+      <div class="badge">Légal</div>
+      <h1>Politique de confidentialité</h1>
+      <p class="date">Dernière mise à jour : 5 juin 2026</p>
+    </div>
+
+    <div class="infobox">
+      Frigy respecte ta vie privée. Cette politique explique clairement quelles données nous collectons, pourquoi, et comment tu peux les contrôler ou les supprimer.
+    </div>
+
+    <h2>1. Responsable du traitement</h2>
+    <p><strong>Frigy</strong>, application développée par Lucas Alaterre, développeur indépendant.</p>
+    <p>Contact : <a href="mailto:contact@frigy.app">contact@frigy.app</a></p>
+
+    <h2>2. Données collectées</h2>
+    <p>Lors de l'utilisation de Frigy, nous collectons uniquement les données nécessaires au fonctionnement du service :</p>
+    <ul>
+      <li><strong>Compte</strong> : adresse e-mail ou identifiant Apple (via Sign In with Apple)</li>
+      <li><strong>Contenu du frigo</strong> : produits ajoutés, dates de péremption, quantités</li>
+      <li><strong>Liste de courses</strong> : articles créés et cochés</li>
+      <li><strong>Données d'usage anonymisées</strong> : fonctionnalités utilisées, fréquence d'ouverture</li>
+    </ul>
+    <p>Nous ne collectons <strong>pas</strong> ta localisation, tes contacts, tes données biométriques, ni aucune donnée non nécessaire au service.</p>
+
+    <h2>3. Finalités du traitement</h2>
+    <ul>
+      <li>Fournir les fonctionnalités de l'application (gestion du frigo, recettes, liste de courses)</li>
+      <li>T'envoyer des notifications avant l'expiration de tes produits</li>
+      <li>Générer des suggestions de recettes personnalisées</li>
+      <li>Calculer et afficher ton impact anti-gaspillage</li>
+      <li>Améliorer l'application et corriger les bugs</li>
+      <li>Assurer la sécurité du service</li>
+    </ul>
+
+    <h2>4. Bases légales (RGPD)</h2>
+    <ul>
+      <li><strong>Exécution du contrat</strong> : pour fournir le service que tu as demandé</li>
+      <li><strong>Intérêt légitime</strong> : amélioration de l'application, sécurité</li>
+      <li><strong>Consentement</strong> : notifications push (révocable à tout moment dans les réglages iOS)</li>
+    </ul>
+
+    <h2>5. Partage des données</h2>
+    <p>Tes données peuvent être transmises aux prestataires techniques suivants, dans le strict cadre de nos services :</p>
+    <ul>
+      <li><strong>Supabase Inc.</strong> — hébergement base de données et authentification. Données hébergées en Europe (UE). Sous-traitant conforme RGPD.</li>
+      <li><strong>Replicate Inc.</strong> — génération d'images de recettes. Seul le nom et la description du plat sont transmis (aucune donnée personnelle).</li>
+      <li><strong>Apple Inc.</strong> — authentification Sign In with Apple.</li>
+    </ul>
+    <p>Nous ne vendons, ne louons et ne partageons jamais tes données à des fins publicitaires ou commerciales.</p>
+
+    <h2>6. Durée de conservation</h2>
+    <ul>
+      <li>Données de compte et contenu : conservés jusqu'à la suppression du compte</li>
+      <li>Données d'usage anonymisées : 24 mois maximum</li>
+      <li>Après suppression : toutes les données sont définitivement effacées sous 30 jours</li>
+    </ul>
+
+    <h2>7. Tes droits (RGPD)</h2>
+    <p>Conformément au Règlement Général sur la Protection des Données, tu disposes des droits suivants :</p>
+    <ul>
+      <li><strong>Accès</strong> : obtenir une copie de toutes tes données</li>
+      <li><strong>Rectification</strong> : corriger des informations inexactes</li>
+      <li><strong>Suppression</strong> : supprimer ton compte et toutes tes données depuis <em>Profil → Paramètres → Supprimer mon compte</em></li>
+      <li><strong>Portabilité</strong> : recevoir tes données dans un format structuré</li>
+      <li><strong>Opposition</strong> : t'opposer à certains traitements basés sur l'intérêt légitime</li>
+      <li><strong>Limitation</strong> : demander la limitation du traitement dans certains cas</li>
+    </ul>
+    <p>Pour exercer ces droits : <a href="mailto:contact@frigy.app">contact@frigy.app</a>. Réponse garantie sous 30 jours.</p>
+
+    <h2>8. Sécurité</h2>
+    <p>Tes données sont protégées par chiffrement TLS en transit et au repos. L'accès est restreint aux seuls systèmes nécessaires. Nous appliquons les meilleures pratiques de sécurité recommandées par les normes OWASP.</p>
+
+    <h2>9. Cookies et traceurs</h2>
+    <p>L'application mobile Frigy n'utilise pas de cookies. Le site frigy.app utilise uniquement des cookies techniques strictement nécessaires au fonctionnement du site, sans dépôt de traceurs publicitaires.</p>
+
+    <h2>10. Mineurs</h2>
+    <p>Frigy n'est pas destiné aux enfants de moins de 13 ans. Nous ne collectons pas sciemment de données personnelles concernant des mineurs de moins de 13 ans.</p>
+
+    <h2>11. Modifications de cette politique</h2>
+    <p>Toute modification significative sera notifiée dans l'application et sur cette page. La date de mise à jour est indiquée en haut de cette page. En continuant à utiliser Frigy après une modification, tu acceptes la nouvelle politique.</p>
+
+    <h2>12. Contact et réclamation</h2>
+    <p>Pour toute question relative à tes données : <a href="mailto:contact@frigy.app">contact@frigy.app</a></p>
+    <p>Tu as également le droit de déposer une réclamation auprès de la <strong>CNIL</strong> (autorité française de protection des données) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer">www.cnil.fr</a></p>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <p>© 2026 Frigy. Tous droits réservés.</p>
+      <div class="footer-links">
+        <a href="/privacy">Confidentialité</a>
+        <a href="/cgv">CGV</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

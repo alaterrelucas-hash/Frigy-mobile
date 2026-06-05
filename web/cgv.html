@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conditions d'utilisation — Frigy</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #3DB33F;
+      --green-dk: #2E8A30;
+      --bg: #F7F7F0;
+      --t1: #1C1C1E;
+      --t2: #3A3A3C;
+      --t3: #8E8E93;
+      --card: #FFFFFF;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--t1);
+      line-height: 1.7;
+    }
+    nav {
+      background: rgba(247,247,240,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { height: 36px; width: 36px; border-radius: 10px; }
+    .nav-logo span { font-size: 20px; font-weight: 900; color: var(--t1); letter-spacing: -0.5px; }
+    .nav-back { font-size: 14px; color: var(--t3); text-decoration: none; display: flex; align-items: center; gap: 6px; }
+    .nav-back:hover { color: var(--t1); }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 56px 32px 100px;
+    }
+
+    .page-header {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .badge {
+      display: inline-flex;
+      background: rgba(61,179,63,0.1);
+      color: var(--green-dk);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: 100px;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      color: var(--t1);
+      margin-bottom: 8px;
+    }
+    .date { font-size: 14px; color: var(--t3); }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--t1);
+      margin: 40px 0 12px;
+    }
+    p { font-size: 15px; color: var(--t2); margin-bottom: 12px; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    li { font-size: 15px; color: var(--t2); margin-bottom: 6px; line-height: 1.6; }
+    a { color: var(--green-dk); }
+    strong { color: var(--t1); }
+
+    .infobox {
+      background: rgba(61,179,63,0.07);
+      border-left: 3px solid var(--green);
+      border-radius: 0 12px 12px 0;
+      padding: 16px 20px;
+      margin: 0 0 32px;
+      font-size: 14px;
+      color: var(--t2);
+      line-height: 1.6;
+    }
+
+    .apple-box {
+      background: #F2F2F7;
+      border-radius: 16px;
+      padding: 20px 24px;
+      margin: 24px 0;
+      font-size: 14px;
+      color: var(--t2);
+      line-height: 1.6;
+    }
+    .apple-box strong { display: block; margin-bottom: 6px; font-size: 15px; }
+
+    footer { border-top: 1px solid rgba(0,0,0,0.07); padding: 28px 32px; }
+    .footer-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer p { font-size: 13px; color: var(--t3); margin-bottom: 0; }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { font-size: 13px; color: var(--t3); text-decoration: none; }
+    .footer-links a:hover { color: var(--t1); }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 20px; }
+      .wrap { padding: 36px 20px 80px; }
+      h1 { font-size: 28px; }
+      footer { padding: 24px 20px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/">
+      <img src="/assets/icon.png" alt="Frigy">
+      <span>Frigy</span>
+    </a>
+    <a class="nav-back" href="/">← Accueil</a>
+  </nav>
+
+  <div class="wrap">
+    <div class="page-header">
+      <div class="badge">Légal</div>
+      <h1>Conditions d'utilisation</h1>
+      <p class="date">Dernière mise à jour : 5 juin 2026</p>
+    </div>
+
+    <div class="infobox">
+      En téléchargeant ou en utilisant Frigy, tu acceptes les présentes conditions d'utilisation. Prends le temps de les lire — elles sont courtes et rédigées clairement.
+    </div>
+
+    <h2>1. Objet</h2>
+    <p>Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation de l'application mobile <strong>Frigy</strong>, éditée par Lucas Alaterre (ci-après "Frigy" ou "nous").</p>
+    <p>Frigy est une application de gestion de frigo et de réduction du gaspillage alimentaire, disponible sur l'App Store d'Apple.</p>
+
+    <h2>2. Acceptation des conditions</h2>
+    <p>Le téléchargement, l'installation ou l'utilisation de Frigy vaut acceptation pleine et entière des présentes CGU. Si tu n'acceptes pas ces conditions, tu ne dois pas utiliser l'application.</p>
+    <p>Tu déclares avoir au moins 13 ans. Si tu as moins de 13 ans, tu ne peux pas utiliser Frigy.</p>
+
+    <h2>3. Accès au service</h2>
+    <p>Frigy est disponible gratuitement sur l'App Store pour les appareils Apple (iPhone, iPad) sous iOS 16 ou version ultérieure.</p>
+    <p>La création d'un compte est requise pour accéder à toutes les fonctionnalités. Tu peux te connecter via ton adresse e-mail ou via Apple Sign In.</p>
+
+    <h2>4. Utilisation du service</h2>
+    <p>Tu t'engages à utiliser Frigy de manière conforme à la loi et aux présentes CGU. Il est interdit de :</p>
+    <ul>
+      <li>Tenter d'accéder aux données d'autres utilisateurs</li>
+      <li>Utiliser l'application à des fins frauduleuses ou illicites</li>
+      <li>Tenter de perturber, dégrader ou compromettre l'infrastructure du service</li>
+      <li>Reproduire, copier, vendre ou revendre tout ou partie du service</li>
+      <li>Contourner les mesures de sécurité ou d'authentification</li>
+    </ul>
+
+    <h2>5. Compte utilisateur</h2>
+    <p>Tu es responsable de la confidentialité de tes identifiants de connexion et de toutes les activités effectuées depuis ton compte.</p>
+    <p>Tu peux supprimer ton compte à tout moment depuis <em>Profil → Paramètres → Supprimer mon compte</em>. La suppression est définitive et entraîne l'effacement de toutes tes données sous 30 jours.</p>
+
+    <h2>6. Propriété intellectuelle</h2>
+    <p>L'application Frigy, son nom, son logo, son design, ses textes et son code source sont la propriété exclusive de Lucas Alaterre et sont protégés par le droit de la propriété intellectuelle.</p>
+    <p>L'utilisation de Frigy ne te confère aucun droit de propriété sur l'application. Toute reproduction, modification ou distribution non autorisée est interdite.</p>
+    <p>Le contenu que tu crées dans l'application (produits, listes, etc.) reste ta propriété. Tu nous accordes une licence limitée pour le traiter dans le cadre de la fourniture du service.</p>
+
+    <h2>7. Disponibilité du service</h2>
+    <p>Frigy s'efforce d'assurer la disponibilité du service 24h/24 et 7j/7. Cependant, nous nous réservons le droit d'interrompre le service pour des opérations de maintenance, des mises à jour, ou en cas de force majeure.</p>
+    <p>Frigy ne peut être tenu responsable des interruptions temporaires de service.</p>
+
+    <h2>8. Limitation de responsabilité</h2>
+    <p>Frigy est fourni "tel quel". Dans les limites permises par la loi applicable :</p>
+    <ul>
+      <li>Frigy ne garantit pas que l'application sera exempte d'erreurs ou disponible en permanence</li>
+      <li>Les suggestions de recettes sont générées automatiquement — vérifie toujours les ingrédients en cas d'allergies alimentaires</li>
+      <li>Les alertes DLC sont indicatives — vérifie toujours l'état réel de tes aliments avant consommation</li>
+      <li>Frigy ne peut être tenu responsable des dommages indirects résultant de l'utilisation de l'application</li>
+    </ul>
+
+    <h2>9. Modifications du service et des CGU</h2>
+    <p>Nous pouvons modifier les présentes CGU à tout moment. Les modifications significatives seront notifiées dans l'application. La poursuite de l'utilisation de Frigy après modification vaut acceptation des nouvelles CGU.</p>
+    <p>Nous pouvons également faire évoluer les fonctionnalités de l'application sans préavis, dans le but d'améliorer le service.</p>
+
+    <h2>10. Résiliation</h2>
+    <p>Tu peux cesser d'utiliser Frigy à tout moment en supprimant l'application et ton compte.</p>
+    <p>Nous nous réservons le droit de suspendre ou résilier un compte en cas de violation des présentes CGU, sans préavis.</p>
+
+    <h2>11. Droit applicable et juridiction</h2>
+    <p>Les présentes CGU sont régies par le <strong>droit français</strong>. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, les tribunaux français seront compétents.</p>
+
+    <div class="apple-box">
+      <strong>Notice Apple (obligatoire)</strong>
+      Ces conditions d'utilisation sont conclues entre toi et Frigy (Lucas Alaterre), et non avec Apple Inc. Apple n'est pas responsable de l'application Frigy ni de son contenu. Apple n'a aucune obligation de fournir des services de maintenance ou de support concernant Frigy. En cas de non-conformité de Frigy avec une garantie applicable, tu peux en informer Apple qui te remboursera le prix d'achat (le cas échéant) — au-delà, Apple n'a aucune obligation de garantie concernant Frigy. Apple n'est pas responsable des réclamations de tiers liées à Frigy. Apple est un tiers bénéficiaire des présentes CGU et peut les faire valoir à ton encontre.
+    </div>
+
+    <h2>12. Contact</h2>
+    <p>Pour toute question concernant ces conditions : <a href="mailto:contact@frigy.app">contact@frigy.app</a></p>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <p>© 2026 Frigy. Tous droits réservés.</p>
+      <div class="footer-links">
+        <a href="/privacy">Confidentialité</a>
+        <a href="/cgv">CGV</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
