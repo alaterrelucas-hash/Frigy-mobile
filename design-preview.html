@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frigy — Design System Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #E8E8E8; padding: 32px 24px; }
+  h1 { text-align: center; font-size: 18px; font-weight: 700; color: #333; margin-bottom: 32px; letter-spacing: -0.3px; }
+  .cols { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .col { width: 390px; }
+  .col-label { text-align: center; font-size: 13px; font-weight: 700; color: #666; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ===== PHONE FRAME ===== */
+  .phone { border-radius: 48px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.25); position: relative; }
+  .phone-inner { height: 780px; overflow: hidden; position: relative; }
+  .status-bar { height: 44px; display: flex; align-items: flex-end; padding: 0 20px 8px; justify-content: space-between; }
+  .status-bar span { font-size: 12px; font-weight: 600; }
+  .screen-content { padding: 0 16px 16px; overflow: hidden; }
+
+  /* ===== BEFORE ===== */
+  .before .phone { background: #F0F2F5; }
+  .before .status-bar { background: #F0F2F5; }
+  .before .status-bar span { color: #0D1117; }
+
+  .before .header { display: flex; justify-content: space-between; align-items: center; padding: 0 0 14px; }
+  .before .header-sub { font-size: 13px; color: #6B7280; }
+  .before .header-title { font-size: 22px; font-weight: 800; color: #0D1117; letter-spacing: -0.5px; }
+
+  .before .hero { background: #CBFADF; border-radius: 20px; padding: 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 4px 12px rgba(46,204,113,0.20); }
+  .before .hero-title { font-size: 24px; font-weight: 800; color: #0D1117; line-height: 1.25; margin-bottom: 14px; }
+  .before .hero-btn { background: rgba(255,255,255,0.8); padding: 8px 16px; border-radius: 100px; font-size: 13px; font-weight: 600; color: #0D1117; display: inline-block; }
+  .before .hero-emoji { width: 48px; height: 48px; background: rgba(255,255,255,0.7); border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid rgba(255,255,255,0.7); }
+
+  .before .card { background: #FFFFFF; border-radius: 18px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); overflow: hidden; }
+  .before .section-title { font-size: 11px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px; margin-bottom: 10px; text-transform: uppercase; }
+  .before .product-row { display: flex; align-items: center; padding: 14px; border-bottom: 1px solid #EAECEF; gap: 12px; }
+  .before .product-row:last-child { border-bottom: none; }
+  .before .product-name { font-size: 14px; font-weight: 600; color: #0D1117; margin-bottom: 2px; }
+  .before .product-sub { font-size: 12px; color: #6B7280; }
+  .before .urg-badge { padding: 5px 10px; border-radius: 10px; }
+  .before .urg-badge span { color: #fff; font-size: 12px; font-weight: 700; }
+
+  .before .green-btn { background: #2ECC71; padding: 15px; border-radius: 14px; text-align: center; color: #fff; font-size: 15px; font-weight: 700;
+    box-shadow: 0 4px 10px rgba(46,204,113,0.30); margin-top: 12px; }
+
+  .before .tab-bar { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #EAECEF; display: flex; justify-content: space-around; padding: 8px 0 24px; }
+  .before .tab-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .before .tab-label { font-size: 10px; color: #C0C8D0; }
+  .before .tab-label.active { color: #2ECC71; }
+  .before .scan-btn { width: 56px; height: 56px; border-radius: 20px; background: #2ECC71; display: flex; align-items: center; justify-content: center; font-size: 22px;
+    box-shadow: 0 4px 10px rgba(46,204,113,0.40); margin-top: -16px; }
+
+  /* ===== AFTER ===== */
+  .after .phone { background: #FFFEF5; }
+  .after .status-bar { background: #FFFEF5; }
+  .after .status-bar span { color: #1C1C1E; }
+
+  .after .header { display: flex; justify-content: space-between; align-items: center; padding: 0 0 14px; }
+  .after .header-sub { font-size: 13px; color: #8E8E93; }
+  .after .header-title { font-size: 22px; font-weight: 900; color: #1C1C1E; letter-spacing: -0.8px; }
+
+  .after .hero { background: #D7F5B1; border-radius: 24px; padding: 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 6px 16px rgba(88,204,2,0.22); }
+  .after .hero-title { font-size: 24px; font-weight: 900; color: #1C1C1E; line-height: 1.25; margin-bottom: 14px; letter-spacing: -0.5px; }
+  .after .hero-btn { background: rgba(255,255,255,0.85); padding: 8px 16px; border-radius: 100px; font-size: 13px; font-weight: 700; color: #1C1C1E; display: inline-block; }
+  .after .hero-emoji { width: 48px; height: 48px; background: rgba(255,255,255,0.75); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid rgba(255,255,255,0.8); }
+
+  .after .card { background: #FFFFFF; border-radius: 24px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.10); overflow: hidden; }
+  .after .section-title { font-size: 11px; font-weight: 700; color: #8E8E93; letter-spacing: 0.5px; margin-bottom: 10px; text-transform: uppercase; }
+  .after .product-row { display: flex; align-items: center; padding: 14px; border-bottom: 1px solid #F2F2F7; gap: 12px; }
+  .after .product-row:last-child { border-bottom: none; }
+  .after .product-name { font-size: 14px; font-weight: 700; color: #1C1C1E; margin-bottom: 2px; }
+  .after .product-sub { font-size: 12px; color: #8E8E93; }
+  .after .urg-badge { padding: 5px 10px; border-radius: 12px; }
+  .after .urg-badge span { color: #fff; font-size: 12px; font-weight: 700; }
+
+  .after .green-btn { background: #58CC02; padding: 15px; border-radius: 16px; text-align: center; color: #fff; font-size: 15px; font-weight: 800;
+    box-shadow: 0 6px 16px rgba(88,204,2,0.45); margin-top: 12px; letter-spacing: -0.2px; }
+
+  .after .tab-bar { position: absolute; bottom: 0; left: 0; right: 0; background: #FFFFFF; border-top: 1px solid #F2F2F7; display: flex; justify-content: space-around; padding: 8px 0 24px; }
+  .after .tab-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .after .tab-label { font-size: 10px; color: #D1D1D6; }
+  .after .tab-label.active { color: #58CC02; font-weight: 700; }
+  .after .scan-btn { width: 56px; height: 56px; border-radius: 20px; background: #58CC02; display: flex; align-items: center; justify-content: center; font-size: 22px;
+    box-shadow: 0 6px 16px rgba(88,204,2,0.50); margin-top: -16px; }
+
+  /* shared */
+  .emoji-cell { font-size: 22px; width: 36px; text-align: center; flex-shrink: 0; }
+  .product-info { flex: 1; }
+  .ml-auto { margin-left: auto; }
+  .stat-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .stat-card-before { flex: 1; background: #fff; border-radius: 14px; padding: 12px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+  .stat-card-after { flex: 1; background: #fff; border-radius: 18px; padding: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.09); }
+  .stat-val-before { font-size: 20px; font-weight: 800; color: #0D1117; }
+  .stat-val-after { font-size: 20px; font-weight: 900; color: #1C1C1E; letter-spacing: -0.5px; }
+  .stat-lbl { font-size: 10px; color: #6B7280; margin-top: 2px; }
+  .stat-lbl-after { font-size: 10px; color: #8E8E93; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<h1>Frigy — Aperçu design system · Avant vs Après</h1>
+
+<div class="cols">
+
+  <!-- ===== AVANT ===== -->
+  <div class="col before">
+    <div class="col-label">Avant</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>●●●</span>
+        </div>
+        <div class="screen-content">
+          <div class="header">
+            <div>
+              <div class="header-sub">Bonjour Lucas 👋</div>
+              <div class="header-title">Mon Frigo</div>
+            </div>
+          </div>
+
+          <div class="hero">
+            <div>
+              <div class="hero-title">3 produits<br>expirent bientôt</div>
+              <div class="hero-btn">Voir tout →</div>
+            </div>
+            <div class="hero-emoji">🥛</div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-card-before">
+              <div class="stat-val-before">12€</div>
+              <div class="stat-lbl">Économisés</div>
+            </div>
+            <div class="stat-card-before">
+              <div class="stat-val-before">4</div>
+              <div class="stat-lbl">Consommés</div>
+            </div>
+            <div class="stat-card-before">
+              <div class="stat-val-before">0.8kg</div>
+              <div class="stat-lbl">CO₂ évité</div>
+            </div>
+          </div>
+
+          <div class="section-title">Bientôt périmés</div>
+          <div class="card">
+            <div class="product-row">
+              <div class="emoji-cell">🥛</div>
+              <div class="product-info">
+                <div class="product-name">Lait demi-écrémé</div>
+                <div class="product-sub">Frigo · Lactel</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FF3B30"><span>J-1</span></div>
+              </div>
+            </div>
+            <div class="product-row">
+              <div class="emoji-cell">🧀</div>
+              <div class="product-info">
+                <div class="product-name">Emmental râpé</div>
+                <div class="product-sub">Frigo · Président</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FF9500"><span>J-3</span></div>
+              </div>
+            </div>
+            <div class="product-row">
+              <div class="emoji-cell">🍳</div>
+              <div class="product-info">
+                <div class="product-name">Œufs bio</div>
+                <div class="product-sub">Frigo</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FFB800"><span>J-5</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="green-btn">+ Ajouter un produit</div>
+        </div>
+
+        <div class="tab-bar">
+          <div class="tab-item">
+            <span style="font-size:18px">🏠</span>
+            <span class="tab-label active">Accueil</span>
+          </div>
+          <div class="tab-item">
+            <span style="font-size:18px">🧊</span>
+            <span class="tab-label">Frigo</span>
+          </div>
+          <div class="scan-btn">📷</div>
+          <div class="tab-item">
+            <span style="font-size:18px">🍳</span>
+            <span class="tab-label">Recettes</span>
+          </div>
+          <div class="tab-item">
+            <span style="font-size:18px">👤</span>
+            <span class="tab-label">Profil</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== APRÈS ===== -->
+  <div class="col after">
+    <div class="col-label">Après</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>●●●</span>
+        </div>
+        <div class="screen-content">
+          <div class="header">
+            <div>
+              <div class="header-sub">Bonjour Lucas 👋</div>
+              <div class="header-title">Mon Frigo</div>
+            </div>
+          </div>
+
+          <div class="hero">
+            <div>
+              <div class="hero-title">3 produits<br>expirent bientôt</div>
+              <div class="hero-btn">Voir tout →</div>
+            </div>
+            <div class="hero-emoji">🥛</div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-card-after">
+              <div class="stat-val-after">12€</div>
+              <div class="stat-lbl-after">Économisés</div>
+            </div>
+            <div class="stat-card-after">
+              <div class="stat-val-after">4</div>
+              <div class="stat-lbl-after">Consommés</div>
+            </div>
+            <div class="stat-card-after">
+              <div class="stat-val-after">0.8kg</div>
+              <div class="stat-lbl-after">CO₂ évité</div>
+            </div>
+          </div>
+
+          <div class="section-title">Bientôt périmés</div>
+          <div class="card">
+            <div class="product-row">
+              <div class="emoji-cell">🥛</div>
+              <div class="product-info">
+                <div class="product-name">Lait demi-écrémé</div>
+                <div class="product-sub">Frigo · Lactel</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FF4B4B"><span>J-1</span></div>
+              </div>
+            </div>
+            <div class="product-row">
+              <div class="emoji-cell">🧀</div>
+              <div class="product-info">
+                <div class="product-name">Emmental râpé</div>
+                <div class="product-sub">Frigo · Président</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FF9600"><span>J-3</span></div>
+              </div>
+            </div>
+            <div class="product-row">
+              <div class="emoji-cell">🍳</div>
+              <div class="product-info">
+                <div class="product-name">Œufs bio</div>
+                <div class="product-sub">Frigo</div>
+              </div>
+              <div class="ml-auto">
+                <div class="urg-badge" style="background:#FFD60A"><span>J-5</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="green-btn">+ Ajouter un produit</div>
+        </div>
+
+        <div class="tab-bar">
+          <div class="tab-item">
+            <span style="font-size:18px">🏠</span>
+            <span class="tab-label active">Accueil</span>
+          </div>
+          <div class="tab-item">
+            <span style="font-size:18px">🧊</span>
+            <span class="tab-label">Frigo</span>
+          </div>
+          <div class="scan-btn">📷</div>
+          <div class="tab-item">
+            <span style="font-size:18px">🍳</span>
+            <span class="tab-label">Recettes</span>
+          </div>
+          <div class="tab-item">
+            <span style="font-size:18px">👤</span>
+            <span class="tab-label">Profil</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center; margin-top:28px; font-size:12px; color:#999;">Ouvre ce fichier dans ton navigateur · <code>design-preview.html</code></p>
+
+</body>
+</html>

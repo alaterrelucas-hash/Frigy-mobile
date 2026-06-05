@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frigy — Finis le gaspillage alimentaire</title>
+  <meta name="description" content="Frigy te aide à gérer ton frigo, éviter le gaspillage et cuisiner malin avec ce que tu as déjà.">
+  <meta property="og:title" content="Frigy — Finis le gaspillage alimentaire">
+  <meta property="og:description" content="Scanne tes courses, suis tes DLC et reçois des recettes anti-gaspillage.">
+  <meta property="og:image" content="/assets/icon.png">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --green: #3DB33F;
+      --green-dk: #2E8A30;
+      --bg: #F7F7F0;
+      --t1: #1C1C1E;
+      --t2: #3A3A3C;
+      --t3: #8E8E93;
+      --card: #FFFFFF;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--t1);
+      line-height: 1.6;
+    }
+
+    /* NAV */
+    nav {
+      background: rgba(247,247,240,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { height: 36px; width: 36px; border-radius: 10px; }
+    .nav-logo span { font-size: 20px; font-weight: 900; color: var(--t1); letter-spacing: -0.5px; }
+    .nav-cta {
+      background: var(--green);
+      color: #fff;
+      text-decoration: none;
+      padding: 9px 18px;
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    /* HERO */
+    .hero {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 80px 24px 64px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(61,179,63,0.12);
+      color: var(--green-dk);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 60px);
+      font-weight: 900;
+      letter-spacing: -2px;
+      line-height: 1.05;
+      color: var(--t1);
+      margin-bottom: 20px;
+    }
+    .hero h1 span { color: var(--green); }
+    .hero p {
+      font-size: 18px;
+      color: var(--t3);
+      max-width: 520px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--t1);
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 24px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .btn-primary svg { width: 20px; height: 20px; fill: #fff; }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      background: var(--card);
+      color: var(--t1);
+      text-decoration: none;
+      padding: 14px 24px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      border: 1.5px solid rgba(0,0,0,0.08);
+    }
+
+    /* STATS */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+      padding: 0 24px 64px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 36px; font-weight: 900; color: var(--green); letter-spacing: -1.5px; }
+    .stat-label { font-size: 13px; color: var(--t3); margin-top: 2px; }
+
+    /* FEATURES */
+    .section { max-width: 900px; margin: 0 auto; padding: 0 24px 80px; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section h2 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      color: var(--t1);
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .feature-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: rgba(61,179,63,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--t1);
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--t3);
+      line-height: 1.6;
+    }
+
+    /* CTA BANNER */
+    .cta-banner {
+      background: var(--green);
+      margin: 0 24px 80px;
+      border-radius: 28px;
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 852px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .cta-banner h2 {
+      font-size: clamp(26px, 4vw, 36px);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .cta-banner p {
+      color: rgba(255,255,255,0.8);
+      font-size: 16px;
+      margin-bottom: 28px;
+    }
+    .cta-banner .btn-white {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      color: var(--green-dk);
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 100px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    footer p { font-size: 13px; color: var(--t3); }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { font-size: 13px; color: var(--t3); text-decoration: none; }
+    .footer-links a:hover { color: var(--t1); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/">
+      <img src="/assets/icon.png" alt="Frigy">
+      <span>Frigy</span>
+    </a>
+    <a class="nav-cta" href="https://apps.apple.com/app/frigy/id6768930083">Télécharger</a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">🌱 Anti-gaspillage alimentaire</div>
+    <h1>Finis le<br><span>gaspillage</span> alimentaire</h1>
+    <p>Frigy scanne tes courses, suit tes dates de péremption et te suggère des recettes avec ce que tu as déjà dans ton frigo.</p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="https://apps.apple.com/app/frigy/id6768930083">
+        <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        App Store
+      </a>
+      <a class="btn-secondary" href="/support">Centre d'aide →</a>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">30€</div>
+      <div class="stat-label">économisés par mois en moyenne</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">-75%</div>
+      <div class="stat-label">de gaspillage alimentaire</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">0,75kg</div>
+      <div class="stat-label">de CO₂ évité par produit sauvé</div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="section">
+    <div class="section-label">Fonctionnalités</div>
+    <h2>Tout ce dont tu as besoin<br>pour ne plus rien jeter</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📷</div>
+        <h3>Scan ultra-rapide</h3>
+        <p>Scanne le code-barres de tes produits ou prends en photo ton ticket de caisse — Frigy enregistre tout automatiquement.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📅</div>
+        <h3>Alertes DLC</h3>
+        <p>Reçois des notifications avant que tes produits expirent. Ne rate plus jamais une date de péremption.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👨‍🍳</div>
+        <h3>Recettes anti-gaspillage</h3>
+        <p>Frigy génère des recettes personnalisées avec ce que tu as dans ton frigo, en priorisant les produits qui vont bientôt expirer.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛒</div>
+        <h3>Liste de courses</h3>
+        <p>Crée et gère ta liste de courses directement dans l'app. Coche les articles en magasin en temps réel.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Suivi de ton impact</h3>
+        <p>Visualise tes économies, ton CO₂ évité et ton score anti-gaspillage semaine après semaine.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👨‍👩‍👧</div>
+        <h3>Partage en famille</h3>
+        <p>Partage ton stock avec toute la famille. Un frigo partagé, zéro doublon, zéro gaspillage.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-banner">
+    <h2>Prêt à sauver ton frigo ?</h2>
+    <p>Télécharge Frigy gratuitement et commence à économiser dès aujourd'hui.</p>
+    <a class="btn-white" href="https://apps.apple.com/app/frigy/id6768930083">
+      Télécharger gratuitement
+    </a>
+  </div>
+
+  <footer>
+    <p>© 2026 Frigy. Tous droits réservés.</p>
+    <div class="footer-links">
+      <a href="/privacy">Confidentialité</a>
+      <a href="/cgv">CGV</a>
+      <a href="/support">Support</a>
+    </div>
+  </footer>
+
+</body>
+</html>

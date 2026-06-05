@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frigy — Support</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F0F2F5; color: #0D1117; line-height: 1.6; }
+
+    .header { background: #fff; border-bottom: 1px solid #EAECEF; padding: 20px 24px; display: flex; align-items: center; gap: 12px; }
+    .logo { width: 40px; height: 40px; background: #2ECC71; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 18px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #0D1117; }
+    .header p { font-size: 13px; color: #6B7280; }
+
+    .container { max-width: 680px; margin: 0 auto; padding: 32px 24px; }
+
+    .hero { background: linear-gradient(135deg, #2ECC71 0%, #27AE60 100%); border-radius: 16px; padding: 32px; color: #fff; margin-bottom: 32px; }
+    .hero h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+    .hero p { opacity: .9; font-size: 15px; }
+
+    .card { background: #fff; border-radius: 14px; padding: 24px; margin-bottom: 20px; border: 1px solid #EAECEF; }
+    .card h3 { font-size: 16px; font-weight: 700; color: #0D1117; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #EAECEF; }
+
+    .faq-item { margin-bottom: 16px; }
+    .faq-item:last-child { margin-bottom: 0; }
+    .faq-q { font-weight: 600; font-size: 14px; color: #0D1117; margin-bottom: 6px; display: flex; gap: 8px; }
+    .faq-q::before { content: "Q."; color: #2ECC71; font-weight: 700; flex-shrink: 0; }
+    .faq-a { font-size: 14px; color: #6B7280; padding-left: 24px; }
+
+    .contact-link { display: inline-flex; align-items: center; gap: 8px; background: #2ECC71; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; margin-top: 8px; }
+    .contact-link:hover { background: #27AE60; }
+
+    .privacy-section p { font-size: 14px; color: #374151; margin-bottom: 12px; }
+    .privacy-section ul { font-size: 14px; color: #374151; padding-left: 20px; }
+    .privacy-section ul li { margin-bottom: 8px; }
+
+    .badge { display: inline-block; background: #F0FFF4; color: #27AE60; border: 1px solid #2ECC7140; padding: 4px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+
+    footer { text-align: center; padding: 24px; font-size: 12px; color: #9CA3AF; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">F</div>
+  <div>
+    <h1>Frigy</h1>
+    <p>Centre de support</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="hero">
+    <h2>Besoin d'aide ?</h2>
+    <p>Frigy est une application mobile anti-gaspillage alimentaire. Elle vous aide à gérer votre frigo, scanner vos produits et obtenir des recettes personnalisées pour consommer avant la date limite.</p>
+  </div>
+
+  <!-- FAQ -->
+  <div class="card">
+    <h3>Questions fréquentes</h3>
+
+    <div class="faq-item">
+      <div class="faq-q">Comment ajouter un produit à mon frigo ?</div>
+      <div class="faq-a">Appuyez sur le bouton <strong>+</strong> en bas de l'écran. Vous pouvez scanner un code-barres, prendre une photo de vos courses ou scanner un ticket de caisse. La date limite de consommation peut être détectée automatiquement par la caméra.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Mon produit n'est pas reconnu par le scanner, que faire ?</div>
+      <div class="faq-a">Si le code-barres n'est pas dans notre base de données (OpenFoodFacts + Spoonacular), vous pouvez saisir le nom du produit manuellement. Ce nom sera mémorisé pour les prochains scans du même code-barres.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Comment fonctionnent les recettes suggérées ?</div>
+      <div class="faq-a">Frigy utilise l'intelligence artificielle (Claude AI) pour générer des recettes adaptées aux produits urgents de votre frigo. Les suggestions sont personnalisées en priorité pour les produits proches de leur date limite.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Comment supprimer ou modifier un produit ?</div>
+      <div class="faq-a">Appuyez sur un produit dans l'onglet Frigo pour ouvrir sa fiche détail. Vous pouvez le marquer comme consommé, gaspillé, ou appuyer sur "Modifier ce produit" pour changer son nom, sa date limite ou son emplacement.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Comment supprimer mon compte ?</div>
+      <div class="faq-a">Envoyez un email à <strong>support@frigy-app.com</strong> depuis l'adresse utilisée lors de l'inscription en indiquant "Suppression de compte". Nous procéderons à la suppression complète de vos données dans un délai de 72h.</div>
+    </div>
+  </div>
+
+  <!-- Contact -->
+  <div class="card">
+    <h3>Nous contacter</h3>
+    <p style="font-size:14px;color:#374151;margin-bottom:12px;">Pour toute question, bug ou demande de suppression de compte, contactez notre équipe support :</p>
+    <a href="mailto:support@frigy-app.com" class="contact-link">
+      ✉️ support@frigy-app.com
+    </a>
+    <p style="font-size:12px;color:#9CA3AF;margin-top:12px;">Réponse sous 48h ouvrées.</p>
+  </div>
+
+  <!-- Politique de confidentialité -->
+  <div class="card privacy-section">
+    <h3>Politique de confidentialité</h3>
+
+    <span class="badge">Dernière mise à jour : mai 2026</span>
+
+    <p><strong>Données collectées</strong></p>
+    <ul>
+      <li>Adresse email (authentification uniquement)</li>
+      <li>Contenu du frigo : noms de produits, dates limites, emplacements</li>
+      <li>Statistiques d'utilisation anonymisées (produits sauvés, gaspillés)</li>
+      <li>Photos de courses et tickets de caisse (traitées par IA, non conservées)</li>
+    </ul>
+
+    <p style="margin-top:14px;"><strong>Utilisation des données</strong></p>
+    <ul>
+      <li>Vos données sont utilisées uniquement pour faire fonctionner l'application</li>
+      <li>Aucune donnée personnelle n'est vendue ou partagée à des tiers à des fins commerciales</li>
+      <li>Les photos envoyées à l'IA (Claude AI) ne sont pas stockées après traitement</li>
+      <li>Les données sont hébergées sur Supabase (serveurs EU)</li>
+    </ul>
+
+    <p style="margin-top:14px;"><strong>Vos droits</strong></p>
+    <p>Conformément au RGPD, vous pouvez à tout moment demander l'accès, la modification ou la suppression de vos données en nous contactant à <strong>support@frigy-app.com</strong>.</p>
+
+    <p style="margin-top:14px;"><strong>Cookies et tracking</strong></p>
+    <p>Frigy n'utilise aucun cookie de tracking publicitaire ni outil d'analytics tiers.</p>
+  </div>
+
+</div>
+
+<footer>
+  © 2026 Frigy · <a href="mailto:support@frigy-app.com" style="color:#2ECC71;">support@frigy-app.com</a>
+</footer>
+
+</body>
+</html>
