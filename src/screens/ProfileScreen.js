@@ -408,6 +408,36 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Cette action est irréversible. Toutes tes données (produits, recettes, profil) seront définitivement supprimées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer définitivement',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (familyId) {
+                await supabase.from('items').delete().eq('family_id', familyId);
+                await supabase.from('shopping_items').delete().eq('family_id', familyId);
+              }
+              if (user?.id) {
+                await supabase.from('saved_recipes').delete().eq('user_id', user.id);
+                await supabase.from('scan_history').delete().eq('user_id', user.id);
+                await supabase.from('profiles').delete().eq('id', user.id);
+              }
+              await supabase.auth.signOut();
+            } catch (e) {
+              Alert.alert('Erreur', 'Impossible de supprimer le compte. Contacte-nous à support@frigy.app');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
@@ -597,6 +627,13 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         onPress={handleLogout}
         style={{ marginHorizontal: 16, marginBottom: 8, padding: 16, borderRadius: 24, alignItems: 'center', borderWidth: 1.5, borderColor: C.red }}>
         <Text style={{ color: C.red, fontWeight: '700', fontSize: 15 }}>{SCREEN.logout}</Text>
+      </TouchableOpacity>
+
+      {/* ── Delete account ── */}
+      <TouchableOpacity
+        onPress={handleDeleteAccount}
+        style={{ marginHorizontal: 16, marginBottom: 16, padding: 14, alignItems: 'center' }}>
+        <Text style={{ color: C.t3, fontSize: 13 }}>Supprimer mon compte</Text>
       </TouchableOpacity>
 
       {/* ── Sub-screens ── */}
