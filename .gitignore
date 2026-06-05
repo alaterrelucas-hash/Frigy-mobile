@@ -38,7 +38,6 @@ supabase/.temp/
 
 # Backup files
 *.backup
-LoginScreen.js
 
 # typescript
 *.tsbuildinfo
