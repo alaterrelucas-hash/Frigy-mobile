@@ -51,9 +51,9 @@
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
-    .nav-logo img { height: 30px; width: 30px; border-radius: 8px; }
-    .nav-logo span { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: -0.4px; }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo .nav-icon { height: 32px; width: 32px; border-radius: 8px; }
+    .nav-logo .nav-wordmark { height: 22px; width: auto; }
     .nav-right { display: flex; align-items: center; gap: 24px; }
     .nav-link { font-size: 14px; color: rgba(255,255,255,0.5); text-decoration: none; font-weight: 500; transition: color .2s; }
     .nav-link:hover { color: #fff; }
@@ -99,6 +99,15 @@
       align-items: center;
       width: 100%;
     }
+
+    .hero-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .hero-brand-icon { width: 52px; height: 52px; border-radius: 14px; }
+    .hero-brand-wordmark { height: 36px; width: auto; }
 
     .hero-eyebrow {
       display: inline-flex;
@@ -291,7 +300,8 @@
       border-radius: 100px;
       text-decoration: none;
     }
-    .s-fridge { font-size: 32px; flex-shrink: 0; margin-left: 6px; }
+    .s-fridge { flex-shrink: 0; margin-left: 6px; }
+    .s-fridge img { width: 52px; height: 52px; border-radius: 14px; box-shadow: 0 4px 12px rgba(61,179,63,0.25); }
 
     /* Stats row */
     .s-stats {
@@ -620,9 +630,9 @@
       justify-content: space-between;
       flex-wrap: wrap; gap: 20px;
     }
-    .footer-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
-    .footer-logo img { height: 28px; width: 28px; border-radius: 7px; opacity: 0.7; }
-    .footer-logo span { font-size: 15px; font-weight: 800; color: rgba(255,255,255,0.5); }
+    .footer-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .footer-logo .fl-icon { height: 28px; width: 28px; border-radius: 7px; opacity: 0.65; }
+    .footer-logo .fl-wordmark { height: 18px; width: auto; opacity: 0.45; filter: brightness(10); }
     .footer-copy { font-size: 13px; color: rgba(255,255,255,0.25); }
     .footer-links { display: flex; gap: 24px; }
     .footer-links a { font-size: 13px; color: rgba(255,255,255,0.35); text-decoration: none; transition: color .2s; }
@@ -671,8 +681,8 @@
 <!-- ── NAV ── -->
 <nav>
   <a class="nav-logo" href="/">
-    <img src="/assets/icon.png" alt="Frigy">
-    <span>Frigy</span>
+    <img class="nav-icon" src="/assets/icon.png" alt="Frigy">
+    <img class="nav-wordmark" src="/assets/logo-text.png" alt="Frigy">
   </a>
   <div class="nav-right">
     <a class="nav-link" href="#features">Fonctionnalités</a>
@@ -687,6 +697,10 @@
   <div class="hero-inner">
 
     <div class="hero-text">
+      <div class="hero-brand">
+        <img src="/assets/icon.png" alt="" class="hero-brand-icon">
+        <img src="/assets/logo-text.png" alt="Frigy" class="hero-brand-wordmark">
+      </div>
       <div class="hero-eyebrow">
         <span class="hero-eyebrow-dot"></span>
         Disponible sur l'App Store
@@ -782,7 +796,7 @@
                 <div class="s-banner-title">3 produits à<br>consommer cette semaine</div>
                 <div class="s-banner-btn">Voir la liste →</div>
               </div>
-              <div class="s-fridge">🧊</div>
+              <div class="s-fridge"><img src="/assets/icon.png" alt="Frigy"></div>
             </div>
 
             <!-- Stats -->
@@ -853,7 +867,7 @@
               <div class="s-tab-label" style="color:var(--green);">Accueil</div>
             </div>
             <div class="s-tab">
-              <div class="s-tab-icon s-tab-badge">🧊</div>
+              <div class="s-tab-icon s-tab-badge">📦</div>
               <div class="s-tab-label">Stock</div>
             </div>
             <div class="s-fab-tab">+</div>
@@ -962,8 +976,8 @@
 <footer>
   <div class="footer-inner">
     <a class="footer-logo" href="/">
-      <img src="/assets/icon.png" alt="Frigy">
-      <span>Frigy</span>
+      <img class="fl-icon" src="/assets/icon.png" alt="Frigy">
+      <img class="fl-wordmark" src="/assets/logo-text.png" alt="Frigy">
     </a>
     <p class="footer-copy">© 2026 Frigy. Tous droits réservés.</p>
     <div class="footer-links">
