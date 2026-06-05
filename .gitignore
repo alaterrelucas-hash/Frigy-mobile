@@ -31,7 +31,15 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.local
+.env.development
+.env.production
 .env*.local
+!.env.example
+
+# secrets
+src/config/replicate.js
 
 # Supabase temp
 supabase/.temp/
