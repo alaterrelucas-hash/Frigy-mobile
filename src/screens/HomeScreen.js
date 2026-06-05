@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
-import { Bell, User, ChevronRight, PartyPopper } from 'lucide-react-native';
+import { Bell, User, ChevronRight, PartyPopper, ShoppingCart } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { C, urgBg, urgLbl } from '../config/constants';
 import { styles } from '../styles';
@@ -15,7 +15,7 @@ const CAT_EMOJI = {
   poisson: '🐟', pain: '🥖', boisson: '🧃', surgelé: '🧊', autre: '🍱',
 };
 
-export default function HomeScreen({ items, expiring, onNav, onUrgent, profileName, onItemPress, familyId }) {
+export default function HomeScreen({ items, expiring, onNav, onUrgent, profileName, onItemPress, familyId, onShopping }) {
   const firstName = profileName ? profileName.split(' ')[0] : '';
   const [monthlyStats, setMonthlyStats] = useState(null);
   const [wastedInsights, setWastedInsights] = useState(null);
@@ -185,6 +185,23 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* ─── LISTE DE COURSES ─── */}
+      <TouchableOpacity onPress={onShopping}
+        style={{ marginHorizontal: 16, marginBottom: 24, backgroundColor: '#fff', borderRadius: 20,
+          padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.07, shadowRadius: 10,
+          flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.green + '18',
+          alignItems: 'center', justifyContent: 'center' }}>
+          <ShoppingCart size={22} color={C.green} strokeWidth={2} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: C.t1 }}>Liste de courses</Text>
+          <Text style={{ fontSize: 12, color: C.t3, marginTop: 1 }}>Gérer ta liste d'achats</Text>
+        </View>
+        <ChevronRight size={18} color={C.t4} />
+      </TouchableOpacity>
 
       {/* ─── TON IMPACT CE MOIS-CI ─── */}
       <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>

@@ -13,7 +13,6 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../config/supabase';
 import { C } from '../config/constants';
-import { styles } from '../styles';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -411,13 +410,13 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
 
   return (
     <ScrollView
-      style={styles.screen}
+      style={{ flex: 1, backgroundColor: C.bg }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: 32 }}>
 
       {/* ── Header ── */}
       <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
-        <Text style={{ fontSize: 30, fontWeight: '900', color: C.t1, letterSpacing: -1 }}>{SCREEN.title}</Text>
+        <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>{SCREEN.title}</Text>
       </View>
 
       {/* ── User Card ── */}
@@ -536,15 +535,14 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
                 <TouchableOpacity
                   key={stat.id}
                   onPress={() => Alert.alert(stat.label, stat.info)}
-                  style={{ flex: 1, padding: 18, borderRadius: 26, backgroundColor: col.bg, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8 }}>
+                  style={{ flex: 1, padding: 18, borderRadius: 24, backgroundColor: C.card,
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <stat.Icon size={22} color={col.text} strokeWidth={1.8} />
-                    <View style={{ opacity: 0.5 }}>
-                      <Info size={13} color={col.text} strokeWidth={1.5} />
-                    </View>
+                    <stat.Icon size={20} color={col.text} strokeWidth={1.8} />
+                    <Info size={12} color={C.t4} strokeWidth={1.5} />
                   </View>
                   <Text style={{ fontSize: 32, fontWeight: '900', color: col.text, letterSpacing: -1 }}>{stat.value}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: col.text, marginTop: 4, opacity: 0.85 }}>{stat.label}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: C.t3, marginTop: 4 }}>{stat.label}</Text>
                 </TouchableOpacity>
               );
             })}

@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Home, Refrigerator, Apple, User, Plus } from 'lucide-react-native';
 
@@ -13,13 +14,15 @@ import { searchImageByName } from './src/api/openfoodfacts';
 import { RC_API_KEY } from './src/config/purchases';
 import useSubscription from './src/hooks/useSubscription';
 
-import LoginScreen   from './src/screens/LoginScreen';
-import HomeScreen    from './src/screens/HomeScreen';
-import FridgeScreen  from './src/screens/FridgeScreen';
-import RecipesScreen from './src/screens/RecipesScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import ScanScreen    from './src/screens/ScanScreen';
-import PaywallScreen from './src/screens/PaywallScreen';
+import LoginScreen        from './src/screens/LoginScreen';
+import OnboardingScreen   from './src/screens/OnboardingScreen';
+import ShoppingListScreen from './src/screens/ShoppingListScreen';
+import HomeScreen       from './src/screens/HomeScreen';
+import FridgeScreen     from './src/screens/FridgeScreen';
+import RecipesScreen    from './src/screens/RecipesScreen';
+import ProfileScreen    from './src/screens/ProfileScreen';
+import ScanScreen       from './src/screens/ScanScreen';
+import PaywallScreen    from './src/screens/PaywallScreen';
 
 // Init RevenueCat si installé
 let Purchases = null;
@@ -40,8 +43,10 @@ export default function App() {
   const [familyId, setFamilyId] = useState(null);
   const [profileName, setProfileName] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
+  const [onboardingDone, setOnboardingDone] = useState(null); // null = en cours de chargement
   const [scanOpen, setScanOpen] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen]       = useState(false);
+  const [shoppingOpen, setShoppingOpen]     = useState(false);
   const [fridgeUrgent, setFridgeUrgent] = useState(false);
   const [fridgeInitialItem, setFridgeInitialItem] = useState(null);
 
@@ -51,6 +56,14 @@ export default function App() {
     if (Purchases && RC_API_KEY && !RC_API_KEY.includes('XXXX')) {
       Purchases.configure({ apiKey: RC_API_KEY });
     }
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('frigy_onboarding_done').then(val => {
+      // null = jamais vu → afficher l'onboarding. 'true' = déjà vu → skip.
+      // Pour tester : passer 'false' à la place de val === 'true'
+      setOnboardingDone(val === 'true');
+    });
   }, []);
 
   useEffect(() => {
@@ -142,16 +155,22 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      {authLoading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}>
+      {authLoading || onboardingDone === null ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFAF8' }}>
           <ActivityIndicator color={C.green} size="large" />
         </View>
+      ) : !onboardingDone ? (
+        <OnboardingScreen onDone={() => {
+          AsyncStorage.setItem('frigy_onboarding_done', 'true');
+          setOnboardingDone(true);
+          posthog.capture('onboarding_completed');
+        }} />
       ) : !user ? (
         <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }} />
       ) : (
         <SafeAreaView style={styles.safe}>
-          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} />}
-          {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} />}
+          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} />}
+          {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
           {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={async (prefs) => { if (!prefs.pushEnabled) { await Notifications.cancelAllScheduledNotificationsAsync(); } else if (items.length > 0) { scheduleExpiryNotifications(items); } }} />}
 
@@ -195,6 +214,12 @@ export default function App() {
           <Modal visible={paywallOpen} animationType="slide" presentationStyle="pageSheet">
             <SafeAreaProvider>
               <PaywallScreen onClose={() => setPaywallOpen(false)} onSuccess={() => setPaywallOpen(false)} purchase={purchase} restore={restore} />
+            </SafeAreaProvider>
+          </Modal>
+
+          <Modal visible={shoppingOpen} animationType="slide" presentationStyle="pageSheet">
+            <SafeAreaProvider>
+              <ShoppingListScreen onClose={() => setShoppingOpen(false)} familyId={familyId} user={user} />
             </SafeAreaProvider>
           </Modal>
         </SafeAreaView>

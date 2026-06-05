@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Refrigerator, Snowflake, Package,
   CalendarDays, AlertTriangle,
-  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox,
+  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, ShoppingCart,
 } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
@@ -67,7 +67,7 @@ function NutritionBadge({ grade }) {
 
 export default function FridgeScreen({
   items, setItems, user, urgentMode, onExitUrgent,
-  initialItem, onInitialItemConsumed, onScan,
+  initialItem, onInitialItemConsumed, onScan, onShopping,
 }) {
   const [q, setQ]                         = useState('');
   const [activeFilter, setActiveFilter]   = useState('Tous');
@@ -430,7 +430,13 @@ export default function FridgeScreen({
         {/* ─── HEADER ─── */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
           paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
-          <Text style={{ fontSize: 30, fontWeight: '900', color: C.t1, letterSpacing: -1 }}>Mon Stock</Text>
+          <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>Mon Stock</Text>
+          <TouchableOpacity onPress={onShopping}
+            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.card,
+              alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 }}>
+            <ShoppingCart size={18} color={C.t2} strokeWidth={2} />
+          </TouchableOpacity>
         </View>
 
         {/* ─── STORAGE TABS ─── */}
