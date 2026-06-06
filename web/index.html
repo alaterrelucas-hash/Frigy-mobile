@@ -627,6 +627,11 @@
 
     /* ── RESPONSIVE ── */
     @media (max-width: 768px) {
+      .nav-logo picture img {
+        height: 30px;
+        width: auto;
+        filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5));
+      }
       .hero-bg {
         background-image: url('/assets/hero-mobile.png') !important;
         background-position: center top !important;
@@ -763,7 +768,10 @@
 <!-- ── NAV ── -->
 <nav>
   <a class="nav-logo" href="/">
-    <img class="nav-full" src="/assets/logo-full.png" alt="Frigy">
+    <picture>
+      <source media="(max-width: 768px)" srcset="/assets/logo-text-transparent.png">
+      <img class="nav-full" src="/assets/logo-full.png" alt="Frigy">
+    </picture>
   </a>
   <div class="nav-right">
     <a class="nav-link" href="#features">Fonctionnalités</a>
