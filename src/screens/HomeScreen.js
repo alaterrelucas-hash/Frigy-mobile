@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { Bell, User, ChevronRight, PartyPopper, ShoppingCart } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
-import { C, urgBg, urgLbl } from '../config/constants';
+import { C, urgBg, urgLbl, CATEGORY_PRICE } from '../config/constants';
 import { styles } from '../styles';
 
 const CAT_FR = {
@@ -47,7 +47,7 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
           });
         }
         setMonthlyStats({
-          savings: saved.reduce((s, i) => s + (i.price || 2.5), 0),
+          savings: saved.reduce((s, i) => s + (i.price || CATEGORY_PRICE[i.category] || 2.5), 0),
           co2: saved.length * 0.75,
           meals: saved.length,
         });

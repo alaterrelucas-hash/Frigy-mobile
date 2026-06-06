@@ -14,6 +14,19 @@ export const C = {
 export const urgBg = d => d <= 1 ? '#FF4B4B' : d <= 3 ? '#FF9500' : '#FFB800';
 export const urgLbl = d => d <= 0 ? 'J-1' : `J-${d}`;
 
+// Prix moyen par catégorie quand le prix réel n'est pas renseigné
+export const CATEGORY_PRICE = {
+  viande:   6.5,
+  poisson:  5.5,
+  laitage:  2.2,
+  surgelé:  3.5,
+  fruit:    1.8,
+  légume:   1.5,
+  pain:     2.0,
+  boisson:  2.0,
+  autre:    2.5,
+};
+
 export const LOC_ITEMS = [
   { id: 'Frigo', Icon: Refrigerator },
   { id: 'Congélateur', Icon: Snowflake },
