@@ -162,37 +162,150 @@ export function suggestLocation(category, name) {
 export function estimateDays(category, name) {
   const n = (name || '').toLowerCase();
   const c = (category || '').toLowerCase();
-  // Épicerie sèche/conserve — ne pas appliquer les durées fraîcheur
+
+  // ── SURGELÉS ──
+  if (c === 'surgelé' || n.includes('surgelé') || n.includes('congelé')) return 180;
+
+  // ── ÉPICERIE SÈCHE ──
   if (c === 'épicerie') {
     if (n.includes('sauce') || n.includes('soupe') || n.includes('purée')) return 180;
+    if (n.includes('huile') || n.includes('vinaigre')) return 365;
     return 365;
   }
-  if (n.includes('poulet') || n.includes('volaille') || c.includes('poultry')) return 3;
-  if (n.includes('viande') || n.includes('bœuf') || n.includes('boeuf') || n.includes('porc') || c.includes('meat')) return 3;
-  if (n.includes('charcuterie') || n.includes('jambon') || n.includes('saucisse')) return 5;
-  if (n.includes('poisson') || n.includes('saumon') || n.includes('thon') || c.includes('fish')) return 2;
-  if (n.includes('crevette') || n.includes('fruits de mer')) return 2;
-  if (n.includes('lait') || c.includes('milk')) return 5;
-  if (n.includes('yaourt') || n.includes('yogurt')) return 21;
+
+  // ── VIANDES ──
+  if (n.includes('poulet') || n.includes('volaille') || n.includes('dinde')) return 3;
+  if (n.includes('haché') || n.includes('steak haché')) return 2;
+  if (n.includes('viande') || n.includes('bœuf') || n.includes('boeuf') ||
+      n.includes('veau') || n.includes('agneau') || n.includes('steak') ||
+      n.includes('côte') || n.includes('filet') || n.includes('escalope')) return 3;
+  if (n.includes('porc') || n.includes('rôti') || n.includes('jarret')) return 3;
+
+  // ── CHARCUTERIE ──
+  if (n.includes('jambon cru') || n.includes('prosciutto') || n.includes('coppa')) return 14;
+  if (n.includes('jambon') || n.includes('jambon blanc')) return 5;
+  if (n.includes('lardons') || n.includes('bacon')) return 7;
+  if (n.includes('saucisse') || n.includes('chipolata') || n.includes('merguez')) return 4;
+  if (n.includes('chorizo') || n.includes('salami') || n.includes('saucisson')) return 14;
+  if (n.includes('pâté') || n.includes('rillettes') || n.includes('terrine')) return 5;
+  if (n.includes('andouille') || n.includes('andouillette')) return 5;
+  if (n.includes('knack') || n.includes('mortadelle')) return 7;
+
+  // ── POISSONS ──
+  if (n.includes('poisson') || n.includes('cabillaud') || n.includes('merlu') ||
+      n.includes('dorade') || n.includes('bar ') || n.includes('sole') ||
+      n.includes('colin') || n.includes('limande')) return 2;
+  if (n.includes('saumon') || n.includes('truite')) return 3;
+  if (n.includes('thon') && !n.includes('conserve')) return 2;
+  if (n.includes('crevette') || n.includes('moule') || n.includes('huître') ||
+      n.includes('coquille') || n.includes('poulpe') || n.includes('calamars') ||
+      n.includes('homard') || n.includes('langoustine')) return 2;
+
+  // ── LAITAGES ──
+  if (n.includes('lait')) return 5;
+  if (n.includes('crème fraîche') || n.includes('crème épaisse')) return 10;
+  if (n.includes('crème liquide') || n.includes('crème fleurette')) return 7;
+  if (n.includes('yaourt') || n.includes('yogurt') || n.includes('skyr') || n.includes('kéfir')) return 21;
+  if (n.includes('petit-suisse') || n.includes('fromage blanc') || n.includes('faisselle')) return 10;
+  if (n.includes('ricotta') || n.includes('mascarpone')) return 7;
+  if (n.includes('mozzarella')) return 5;
+  if (n.includes('burrata')) return 3;
+  if (n.includes('camembert') || n.includes('brie') || n.includes('coulommiers')) return 14;
+  if (n.includes('roquefort') || n.includes('gorgonzola') || n.includes('bleu')) return 21;
+  if (n.includes('comté') || n.includes('gruyère') || n.includes('emmental') ||
+      n.includes('cheddar') || n.includes('parmesan') || n.includes('gouda') ||
+      n.includes('mimolette') || n.includes('beaufort')) return 30;
+  if (n.includes('fromage') || c === 'laitage') return 14;
+  if (n.includes('beurre') || n.includes('margarine')) return 30;
   if (n.includes('crème') || n.includes('creme')) return 7;
-  if (n.includes('beurre')) return 30;
-  if (n.includes('fromage') || c.includes('cheese')) return 14;
-  if (n.includes('œuf') || n.includes('oeuf') || c.includes('egg')) return 28;
-  if (n.includes('fraise') || n.includes('framboise') || n.includes('myrtille')) return 4;
-  if (n.includes('salade') || n.includes('épinard') || n.includes('roquette')) return 4;
-  if (n.includes('avocat')) return 3;
-  if (n.includes('tomate') || n.includes('concombre')) return 7;
-  if (n.includes('pomme') || n.includes('poire') || n.includes('orange')) return 14;
-  if (c.includes('fruit') || c.includes('vegetable')) return 7;
-  if (n.includes('pain') || n.includes('baguette') || n.includes('croissant')) return 3;
-  if (n.includes('brioche') || n.includes('viennoiserie')) return 5;
-  if (c.includes('prepared') || c.includes('traiteur') || c.includes('ready meal')) return 3;
-  if (n.includes('jus') || c.includes('juice')) return 7;
-  if (c.includes('beverage') || c.includes('boisson')) return 90;
-  if (n.includes('surgelé') || c.includes('frozen')) return 180;
-  if (c.includes('pasta') || c.includes('rice') || c.includes('cereal')) return 365;
-  if (c.includes('canned') || c.includes('conserve')) return 730;
-  return 90;
+
+  // ── ŒUFS ──
+  if (n.includes('œuf') || n.includes('oeuf')) return 28;
+
+  // ── TRAITEUR / PLATS FRAIS ──
+  if (n.includes('houmous') || n.includes('hummus') || n.includes('guacamole') ||
+      n.includes('tzatziki') || n.includes('tapenade') || n.includes('caviar d')) return 7;
+  if (n.includes('taboulé') || n.includes('salade composée')) return 3;
+  if (n.includes('quiche') || n.includes('pizza fraîche') || n.includes('wrap')) return 3;
+  if (n.includes('sushi') || n.includes('maki') || n.includes('sashimi')) return 1;
+  if (n.includes('sandwich') || n.includes('panini')) return 2;
+  if (n.includes('plat cuisiné') || n.includes('plat préparé') || n.includes('lasagne')) return 3;
+  if (n.includes('soupe fraîche') || n.includes('gaspacho')) return 5;
+
+  // ── LÉGUMES FRAIS ──
+  if (n.includes('salade') || n.includes('laitue') || n.includes('scarole') ||
+      n.includes('frisée') || n.includes('mâche')) return 4;
+  if (n.includes('épinard') || n.includes('roquette') || n.includes('mesclun')) return 4;
+  if (n.includes('herbe') || n.includes('persil') || n.includes('coriandre') ||
+      n.includes('ciboulette') || n.includes('basilic') || n.includes('menthe') ||
+      n.includes('estragon') || n.includes('thym frais') || n.includes('romarin frais')) return 5;
+  if (n.includes('champignon') || n.includes('girolles') || n.includes('cèpes') ||
+      n.includes('morilles')) return 5;
+  if (n.includes('asperge')) return 4;
+  if (n.includes('petit pois') || n.includes('haricot vert') || n.includes('fève')) return 5;
+  if (n.includes('maïs')) return 4;
+  if (n.includes('brocoli') || n.includes('chou-fleur') || n.includes('romanesco')) return 7;
+  if (n.includes('artichaut')) return 6;
+  if (n.includes('poivron') || n.includes('piment')) return 10;
+  if (n.includes('courgette') || n.includes('aubergine')) return 10;
+  if (n.includes('concombre')) return 7;
+  if (n.includes('tomate')) return 7;
+  if (n.includes('radis')) return 7;
+  if (n.includes('betterave fraîche')) return 14;
+  if (n.includes('céleri') || n.includes('poireau')) return 14;
+  if (n.includes('chou') && !n.includes('chou-fleur')) return 21;
+  if (n.includes('fenouil')) return 10;
+  if (n.includes('carotte') || n.includes('navet') || n.includes('panais')) return 21;
+  if (n.includes('pomme de terre') || n.includes('patate douce')) return 30;
+  if (n.includes('oignon') || n.includes('échalote') || n.includes('ail')) return 45;
+  if (n.includes('courge') || n.includes('potiron') || n.includes('potimarron') ||
+      n.includes('butternut')) return 60;
+
+  // ── FRUITS FRAIS ──
+  if (n.includes('fraise')) return 4;
+  if (n.includes('framboise') || n.includes('mûre')) return 3;
+  if (n.includes('myrtille') || n.includes('groseille') || n.includes('cassis')) return 5;
+  if (n.includes('cerise') || n.includes('griotte')) return 5;
+  if (n.includes('raisin')) return 7;
+  if (n.includes('figue')) return 4;
+  if (n.includes('abricot') || n.includes('prune') || n.includes('mirabelle')) return 5;
+  if (n.includes('pêche') || n.includes('nectarine') || n.includes('brugnon')) return 5;
+  if (n.includes('avocat')) return 4;
+  if (n.includes('mangue') || n.includes('papaye') || n.includes('goyave')) return 5;
+  if (n.includes('litchi') || n.includes('lychee')) return 7;
+  if (n.includes('kiwi')) return 10;
+  if (n.includes('melon') || n.includes('pastèque')) return 7;
+  if (n.includes('ananas')) return 7;
+  if (n.includes('banane')) return 5;
+  if (n.includes('poire')) return 7;
+  if (n.includes('pomme')) return 21;
+  if (n.includes('orange') || n.includes('pamplemousse') || n.includes('clémentine') ||
+      n.includes('mandarine') || n.includes('citron') || n.includes('kumquat')) return 21;
+  if (n.includes('grenade')) return 14;
+
+  // ── PAIN & VIENNOISERIE ──
+  if (n.includes('baguette') || n.includes('pain tradition') || n.includes('flûte')) return 2;
+  if (n.includes('pain de mie') || n.includes('pain de campagne') || n.includes('pain complet')) return 7;
+  if (n.includes('croissant') || n.includes('pain au chocolat') || n.includes('chausson')) return 2;
+  if (n.includes('brioche') || n.includes('pain brioché')) return 5;
+  if (n.includes('pain') || c === 'pain') return 3;
+
+  // ── BOISSONS ──
+  if (n.includes('jus frais') || n.includes('jus pressé') || n.includes('smoothie')) return 5;
+  if (n.includes('jus') || c === 'boisson') return 30;
+
+  // ── CONSERVES & ÉPICERIE ──
+  if (n.includes('conserve') || n.includes('boîte de')) return 730;
+  if (c === 'épicerie' || c === 'café' || c === 'autre') return 365;
+
+  // Fallback par catégorie
+  if (c === 'fruit') return 7;
+  if (c === 'légume') return 7;
+  if (c === 'viande') return 3;
+  if (c === 'poisson') return 2;
+  if (c === 'laitage') return 10;
+
+  return 30;
 }
 
 export function getStorageTip(category, name) {
