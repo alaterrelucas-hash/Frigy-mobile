@@ -126,21 +126,29 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
         const total = (monthlyStats?.meals || 0) + (monthlyStats?.wastedCount || 0);
         if (total < 3) return null;
         const pct = Math.round((monthlyStats.meals / total) * 100);
-        const grade = pct >= 85 ? 'A' : pct >= 70 ? 'B' : pct >= 50 ? 'C' : 'D';
-        const gradeColor = pct >= 85 ? C.green : pct >= 70 ? '#34C759' : pct >= 50 ? '#FF9500' : '#FF3B30';
+        const tier =
+          pct >= 85 ? { icon: '🏆', label: 'Champion',     color: C.green,   bg: '#E8F5DC' } :
+          pct >= 70 ? { icon: '⭐', label: 'Très bien',     color: '#2D9CDB', bg: '#E8F4FD' } :
+          pct >= 50 ? { icon: '🌱', label: 'En progression', color: '#FF9500', bg: '#FFF3E0' } :
+                      { icon: '💪', label: 'Tu peux le faire', color: '#9B59B6', bg: '#F5EEF8' };
         return (
           <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#fff', borderRadius: 20,
             paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center',
             shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: gradeColor + '18',
+            <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: tier.bg,
               alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: gradeColor }}>{grade}</Text>
+              <Text style={{ fontSize: 24 }}>{tier.icon}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: C.t1 }}>Score anti-gaspillage</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: C.t1 }}>Score anti-gaspillage</Text>
+                <View style={{ backgroundColor: tier.bg, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: tier.color }}>{tier.label}</Text>
+                </View>
+              </View>
               <Text style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>{pct}% des produits sauvés ce mois</Text>
               <View style={{ height: 4, borderRadius: 2, backgroundColor: C.border, marginTop: 8, overflow: 'hidden' }}>
-                <View style={{ height: 4, width: `${pct}%`, borderRadius: 2, backgroundColor: gradeColor }} />
+                <View style={{ height: 4, width: `${pct}%`, borderRadius: 2, backgroundColor: tier.color }} />
               </View>
             </View>
           </View>
