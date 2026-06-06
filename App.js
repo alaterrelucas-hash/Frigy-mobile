@@ -210,7 +210,7 @@ export default function App() {
               return (
                 <TouchableOpacity key={t.id} style={styles.tabItem} onPress={() => { setTab(t.id); posthog.capture('screen_viewed', { screen: t.id }); }}>
                   <View>
-                    <t.Icon size={22} color={on ? C.green : C.t3} strokeWidth={on ? 2.5 : 1.8} />
+                    <t.Icon size={22} color={on ? C.green : C.t2} strokeWidth={on ? 2.5 : 1.8} />
                     {t.id === 'fridge' && expiring.length > 0 && (
                       <View style={[styles.badge, { top: -4, right: -6 }]}>
                         <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{expiring.length}</Text>

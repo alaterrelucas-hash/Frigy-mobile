@@ -30,7 +30,7 @@ export const styles = StyleSheet.create({
                   backgroundColor: '#fff', paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 20 : 8,
                   borderTopWidth: 1, borderTopColor: C.border },
   tabItem:      { alignItems: 'center', gap: 2, paddingHorizontal: 14 },
-  tabLabel:     { fontSize: 10, color: C.t4 },
+  tabLabel:     { fontSize: 10, color: C.t2 },
   tabLabelActive: { fontSize: 10, fontWeight: '700', color: C.green },
   tabDot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: C.green, marginTop: 1 },
   scanBtn:      { width: 56, height: 56, borderRadius: 28, backgroundColor: C.green,
