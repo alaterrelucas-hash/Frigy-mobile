@@ -483,8 +483,8 @@ export default function FridgeScreen({
           </View>
         )}
 
-        {/* ─── SEARCH BAR ─── */}
-        {items.length > 0 && (
+        {/* ─── SEARCH + SECTIONS ─── */}
+        {items.length > 0 && (<>
         <View style={{ marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center',
           backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, height: 54,
           shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6,
@@ -571,7 +571,7 @@ export default function FridgeScreen({
             </View>
           );
         })}
-        )}
+        </>)}
 
       </ScrollView>
     </View>
