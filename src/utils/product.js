@@ -308,6 +308,74 @@ export function estimateDays(category, name) {
   return 30;
 }
 
+export function estimateOpeningDays(category, name) {
+  const n = (name || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+
+  // ── LAITAGES ──
+  if (n.includes('lait')) return 5;
+  if (n.includes('crème fraîche') || n.includes('crème épaisse')) return 5;
+  if (n.includes('crème liquide') || n.includes('crème fleurette')) return 4;
+  if (n.includes('yaourt') || n.includes('yogurt') || n.includes('skyr') || n.includes('kéfir')) return 7;
+  if (n.includes('fromage blanc') || n.includes('faisselle') || n.includes('petit-suisse')) return 5;
+  if (n.includes('ricotta') || n.includes('mascarpone')) return 4;
+  if (n.includes('mozzarella') || n.includes('burrata')) return 2;
+  if (n.includes('camembert') || n.includes('brie') || n.includes('coulommiers')) return 7;
+  if (n.includes('roquefort') || n.includes('gorgonzola') || n.includes('bleu')) return 14;
+  if (n.includes('comté') || n.includes('gruyère') || n.includes('emmental') ||
+      n.includes('cheddar') || n.includes('parmesan') || n.includes('gouda') ||
+      n.includes('mimolette') || n.includes('beaufort')) return 21;
+  if (n.includes('fromage') || c === 'laitage') return 7;
+  if (n.includes('beurre') || n.includes('margarine')) return 30;
+  if (n.includes('crème') || n.includes('creme')) return 5;
+
+  // ── CHARCUTERIE ──
+  if (n.includes('jambon cru') || n.includes('prosciutto') || n.includes('coppa')) return 7;
+  if (n.includes('jambon')) return 3;
+  if (n.includes('lardons') || n.includes('bacon')) return 5;
+  if (n.includes('saucisse') || n.includes('chipolata') || n.includes('merguez')) return 3;
+  if (n.includes('chorizo') || n.includes('salami') || n.includes('saucisson')) return 10;
+  if (n.includes('pâté') || n.includes('rillettes') || n.includes('terrine')) return 3;
+  if (n.includes('knack') || n.includes('mortadelle')) return 5;
+
+  // ── POISSONS ──
+  if (n.includes('saumon fumé') || n.includes('truite fumée')) return 3;
+  if ((n.includes('thon') || n.includes('sardine') || n.includes('maquereau')) && n.includes('conserve')) return 2;
+
+  // ── CONSERVES ──
+  if (n.includes('conserve') || n.includes('boîte de')) return 3;
+
+  // ── JUS & BOISSONS ──
+  if (n.includes('jus frais') || n.includes('jus pressé') || n.includes('smoothie')) return 3;
+  if (n.includes('jus') || c === 'boisson') return 7;
+
+  // ── PAIN ──
+  if (n.includes('pain de mie')) return 5;
+
+  // ── SAUCES & CONDIMENTS ──
+  if (n.includes('ketchup') || n.includes('mayonnaise')) return 30;
+  if (n.includes('sauce')) return 21;
+  if (n.includes('moutarde')) return 60;
+  if (n.includes('confiture') || n.includes('miel')) return 90;
+  if (n.includes('huile') || n.includes('vinaigre')) return 90;
+
+  // ── TRAITEUR FRAIS ──
+  if (n.includes('sushi') || n.includes('maki') || n.includes('sashimi')) return 1;
+  if (n.includes('houmous') || n.includes('hummus') || n.includes('guacamole') ||
+      n.includes('tzatziki') || n.includes('tapenade')) return 4;
+  if (n.includes('taboulé') || n.includes('salade composée')) return 2;
+  if (n.includes('quiche') || n.includes('pizza fraîche') || n.includes('wrap')) return 2;
+  if (n.includes('plat cuisiné') || n.includes('lasagne') || n.includes('plat préparé')) return 2;
+
+  // ── FALLBACK PAR CATÉGORIE ──
+  if (c === 'viande') return 2;
+  if (c === 'poisson') return 1;
+  if (c === 'laitage') return 5;
+  if (c === 'fruit' || c === 'légume') return 3;
+
+  return 5;
+}
+
 export function getStorageTip(category, name) {
   const c = (category || '').toLowerCase();
   const n = (name || '').toLowerCase();

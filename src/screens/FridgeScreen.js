@@ -1,17 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image, Switch } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
   Search, ScanLine,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Refrigerator, Snowflake, Package,
   CalendarDays, AlertTriangle,
-  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, ShoppingCart,
+  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, ShoppingCart, PackageOpen,
 } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
 import { C, urgBg, urgLbl, LOC_ITEMS, SCREEN_W } from '../config/constants';
-import { parseDlc, formatDlcInput, getStorageTip } from '../utils/product';
+import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays } from '../utils/product';
 import { styles } from '../styles';
 
 const BG    = '#F7F9F8';
@@ -146,6 +146,22 @@ export default function FridgeScreen({
       setItems(p => p.map(x => x.id === item.id ? { ...x, quantity: newQty } : x));
       await supabase.from('items').update({ quantity: newQty }).eq('id', item.id);
     }
+  };
+
+  const toggleOpened = async (item, newVal) => {
+    const today = new Date();
+    const updates = { opened: newVal, opened_at: newVal ? today.toISOString().split('T')[0] : null };
+    if (newVal) {
+      const openDays = estimateOpeningDays(item.category, item.name);
+      const exp = new Date(today);
+      exp.setDate(exp.getDate() + openDays);
+      const newDlc = `${String(exp.getDate()).padStart(2,'0')}/${String(exp.getMonth()+1).padStart(2,'0')}/${exp.getFullYear()}`;
+      updates.dlc = newDlc;
+      updates.days_left = openDays;
+    }
+    setItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newVal ? updates.days_left : x.days } : x));
+    setSelectedItem(prev => ({ ...prev, ...updates, days: newVal ? updates.days_left : prev.days }));
+    await supabase.from('items').update(updates).eq('id', item.id);
   };
 
   /* ── ProductCard ── */
@@ -337,6 +353,26 @@ export default function FridgeScreen({
                           <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>{dlcFormatted}</Text>
                         </View>
                       )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
+                        borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <PackageOpen size={18} color={item.opened ? C.green : C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, color: C.t2 }}>Ouvert</Text>
+                          {item.opened && item.opened_at && (
+                            <Text style={{ fontSize: 11, color: C.t4, marginTop: 1 }}>
+                              depuis le {item.opened_at.split('-').reverse().join('/')}
+                            </Text>
+                          )}
+                        </View>
+                        <Switch
+                          value={!!item.opened}
+                          onValueChange={v => toggleOpened(item, v)}
+                          trackColor={{ false: C.border, true: `${C.green}80` }}
+                          thumbColor={item.opened ? C.green : '#fff'}
+                          ios_backgroundColor={C.border}
+                        />
+                      </View>
+
                       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
                         borderBottomWidth: item.price ? 1 : 0, borderBottomColor: C.border }}>
                         <Package size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
