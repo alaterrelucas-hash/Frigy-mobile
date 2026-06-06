@@ -459,7 +459,30 @@ export default function FridgeScreen({
           })}
         </View>
 
+        {/* ─── EMPTY STATE ─── */}
+        {items.length === 0 && (
+          <View style={{ alignItems: 'center', paddingTop: 32, paddingHorizontal: 32, paddingBottom: 40 }}>
+            <Image
+              source={require('../../assets/fridge.png')}
+              style={{ width: 130, height: 130, marginBottom: 24 }}
+              resizeMode="contain"
+            />
+            <Text style={{ fontSize: 22, fontWeight: '900', color: C.t1, letterSpacing: -0.8, marginBottom: 10, textAlign: 'center' }}>
+              Ton frigo est vide
+            </Text>
+            <Text style={{ fontSize: 15, color: C.t3, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+              Scanne tes produits pour suivre tes DLC et ne plus rien gaspiller.
+            </Text>
+            <TouchableOpacity onPress={onScan}
+              style={{ backgroundColor: C.green, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 36,
+                shadowColor: C.green, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Scanner un produit</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ─── SEARCH BAR ─── */}
+        {items.length > 0 && (
         <View style={{ marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center',
           backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, height: 54,
           shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6,
@@ -546,6 +569,7 @@ export default function FridgeScreen({
             </View>
           );
         })}
+        )}
 
       </ScrollView>
     </View>
