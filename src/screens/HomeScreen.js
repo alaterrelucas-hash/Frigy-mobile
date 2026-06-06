@@ -50,6 +50,7 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
           savings: saved.reduce((s, i) => s + (i.price || CATEGORY_PRICE[i.category] || 2.5), 0),
           co2: saved.length * 0.75,
           meals: saved.length,
+          wastedCount: wasted.length,
         });
       });
   }, [familyId]);
@@ -119,6 +120,32 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
           </View>
         ))}
       </View>
+
+      {/* ─── SCORE FRIGO ─── */}
+      {(() => {
+        const total = (monthlyStats?.meals || 0) + (monthlyStats?.wastedCount || 0);
+        if (total < 3) return null;
+        const pct = Math.round((monthlyStats.meals / total) * 100);
+        const grade = pct >= 85 ? 'A' : pct >= 70 ? 'B' : pct >= 50 ? 'C' : 'D';
+        const gradeColor = pct >= 85 ? C.green : pct >= 70 ? '#34C759' : pct >= 50 ? '#FF9500' : '#FF3B30';
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#fff', borderRadius: 20,
+            paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: gradeColor + '18',
+              alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+              <Text style={{ fontSize: 24, fontWeight: '900', color: gradeColor }}>{grade}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: C.t1 }}>Score anti-gaspillage</Text>
+              <Text style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>{pct}% des produits sauvés ce mois</Text>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: C.border, marginTop: 8, overflow: 'hidden' }}>
+                <View style={{ height: 4, width: `${pct}%`, borderRadius: 2, backgroundColor: gradeColor }} />
+              </View>
+            </View>
+          </View>
+        );
+      })()}
 
       {/* ─── TON ANALYSE ─── */}
       <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
