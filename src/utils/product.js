@@ -78,42 +78,26 @@ export function suggestLocation(category, name) {
   const c = (category || '').toLowerCase().trim();
   const n = (name || '').toLowerCase();
 
-  // Congélateur
+  // 1. Congélateur — priorité absolue
   if (c === 'surgelé' || n.includes('surgelé') || n.includes('congelé')) return 'Congélateur';
 
-  // Placard — conserves, épicerie sèche, boissons (avant les checks par nom)
-  if (['épicerie', 'café', 'autre'].includes(c)) return 'Placard';
-  if (c === 'boisson' && !n.includes('jus frais') && !n.includes('smoothie')) return 'Placard';
-  if (c === 'pain') return 'Placard';
+  // 2. Checks par NOM en priorité (avant les catégories larges qui peuvent être mal classées)
 
-  // Frigo — par catégorie
-  if (['laitage', 'viande', 'poisson'].includes(c)) return 'Frigo';
-
-  // Fruit/légume — certains à température ambiante
-  if (c === 'fruit' || c === 'légume') {
-    if (n.includes('pomme de terre') || n.includes('oignon') || n.includes('ail') ||
-        n.includes('échalote') || n.includes('carotte') || n.includes('navet') ||
-        n.includes('courge') || n.includes('potiron') || n.includes('banane') ||
-        n.includes('citron') || n.includes('orange') || n.includes('mandarine') ||
-        n.includes('clémentine') || n.includes('pomme') || n.includes('poire') ||
-        n.includes('ananas')) return 'Placard';
-    return 'Frigo';
-  }
-
-  // Frigo — produits laitiers
+  // Frigo — laitages
   if (n.includes('lait') || n.includes('yaourt') || n.includes('yogurt') ||
       n.includes('fromage') || n.includes('crème') || n.includes('beurre') ||
       n.includes('margarine') || n.includes('kéfir') || n.includes('skyr') ||
       n.includes('ricotta') || n.includes('mozzarella') || n.includes('gruyère') ||
       n.includes('emmental') || n.includes('camembert') || n.includes('brie') ||
-      n.includes('roquefort') || n.includes('comté') || n.includes('cheddar')) return 'Frigo';
+      n.includes('roquefort') || n.includes('comté') || n.includes('cheddar') ||
+      n.includes('fromage blanc') || n.includes('petit-suisse')) return 'Frigo';
 
   // Frigo — viandes
   if (n.includes('viande') || n.includes('poulet') || n.includes('volaille') ||
       n.includes('bœuf') || n.includes('boeuf') || n.includes('veau') ||
       n.includes('porc') || n.includes('agneau') || n.includes('dinde') ||
       n.includes('canard') || n.includes('steak') || n.includes('escalope') ||
-      n.includes('côtelette') || n.includes('filet de')) return 'Frigo';
+      n.includes('côtelette') || n.includes('filet de') || n.includes('haché')) return 'Frigo';
 
   // Frigo — charcuterie
   if (n.includes('jambon') || n.includes('lardons') || n.includes('bacon') ||
@@ -144,9 +128,33 @@ export function suggestLocation(category, name) {
       n.includes('avocat') || n.includes('mangue') || n.includes('pêche') ||
       n.includes('abricot') || n.includes('nectarine') || n.includes('litchi')) return 'Frigo';
 
-  // Frigo — traiteur / plats frais
-  if (n.includes('houmous') || n.includes('guacamole') || n.includes('tzatziki') ||
-      n.includes('taboulé') || n.includes('quiche') || n.includes('pizza fraîche')) return 'Frigo';
+  // Frigo — traiteur / plats frais / dips
+  if (n.includes('houmous') || n.includes('hummus') || n.includes('guacamole') ||
+      n.includes('tzatziki') || n.includes('taboulé') || n.includes('quiche') ||
+      n.includes('pizza fraîche') || n.includes('tapenade') || n.includes('caviar d') ||
+      n.includes('brandade') || n.includes('rillette') || n.includes('terrine') ||
+      n.includes('mousse') || n.includes('pâté') || n.includes('wrap') ||
+      n.includes('sandwich') || n.includes('sushi') || n.includes('tartinade')) return 'Frigo';
+
+  // Frigo — jus frais et smoothies
+  if (n.includes('jus frais') || n.includes('smoothie') || n.includes('jus pressé')) return 'Frigo';
+
+  // 3. Checks par catégorie (fallback — après les vérifs par nom)
+  if (['laitage', 'viande', 'poisson'].includes(c)) return 'Frigo';
+
+  if (c === 'fruit' || c === 'légume') {
+    if (n.includes('pomme de terre') || n.includes('oignon') || n.includes('ail') ||
+        n.includes('échalote') || n.includes('carotte') || n.includes('navet') ||
+        n.includes('courge') || n.includes('potiron') || n.includes('banane') ||
+        n.includes('citron') || n.includes('orange') || n.includes('mandarine') ||
+        n.includes('clémentine') || n.includes('pomme') || n.includes('poire') ||
+        n.includes('ananas')) return 'Placard';
+    return 'Frigo';
+  }
+
+  if (['épicerie', 'café', 'autre'].includes(c)) return 'Placard';
+  if (c === 'boisson' && !n.includes('jus frais') && !n.includes('smoothie')) return 'Placard';
+  if (c === 'pain') return 'Placard';
 
   return 'Placard';
 }
