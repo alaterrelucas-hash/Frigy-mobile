@@ -196,7 +196,7 @@ export default function App() {
           <View style={styles.tabBar}>
             {[
               { id: 'home',    label: 'Accueil',  Icon: Home },
-              { id: 'fridge',  label: 'Stock',    Icon: Refrigerator },
+              { id: 'fridge',  label: 'Produits', Icon: Refrigerator },
               { id: 'scan',    isScan: true },
               { id: 'recipes', label: 'Recettes', Icon: Apple },
               { id: 'profile', label: 'Profil',   Icon: User },
