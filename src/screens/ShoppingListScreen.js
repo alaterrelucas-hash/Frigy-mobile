@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Plus, Trash2, ShoppingCart, CheckCircle2, Circle } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
+import * as Haptics from 'expo-haptics';
 import { C } from '../config/constants';
 
 export default function ShoppingListScreen({ onClose, familyId, user }) {
@@ -41,6 +42,7 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
   const addItem = async () => {
     const name = input.trim();
     if (!name || !fid) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const tempId = `temp-${Date.now()}`;
     const tempItem = { id: tempId, family_id: fid, name, quantity: '1', checked: false };
     setItems(prev => [...prev, tempItem]);

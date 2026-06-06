@@ -18,6 +18,7 @@ import { searchOpenFoodFacts, searchImageByName } from '../api/openfoodfacts';
 import { searchProductCache, saveProductCache } from '../api/productCache';
 import { mergeProductData } from '../utils/product';
 import { styles } from '../styles';
+import * as Haptics from 'expo-haptics';
 
 const RECEIPT_SCREEN = {
   title: 'Scan ticket de caisse',
@@ -283,6 +284,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     const savedUnits = rows.map(r => r.total_units || 1);
     const { data, error } = await supabase.from('items').insert(rows).select();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setReceiptSaving(false); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setItems(prev => [...prev, ...(data || []).map((i, idx) => ({
       ...i, days: i.days_left, total_units: i.total_units || savedUnits[idx] || 1,
     }))]);
@@ -374,6 +376,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     };
     const { data, error } = await supabase.from('items').insert(newItem).select().single();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder le produit.'); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (result.source === 'Manuel' && manualName.trim() && result.barcode) {
       saveProductCache(result.barcode, {
         name: manualName.trim(), brand: '', category: result.category || '',

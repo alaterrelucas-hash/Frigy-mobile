@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import {
   Search, ScanLine,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
@@ -121,6 +122,7 @@ export default function FridgeScreen({
   };
 
   const consumeItem = async (item, wasted = false) => {
+    Haptics.impactAsync(wasted ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
     setItems(p => p.filter(x => x.id !== item.id));
     setSelectedItem(null);
     await supabase.from('items').update({ consumed: true, wasted }).eq('id', item.id);
