@@ -65,8 +65,15 @@ const PHOTO_METHODS_CONFIG = [
   },
 ];
 
+const RECEIPT_FREE_KEY = 'frigy_receipt_free_used';
+
 export default function ScanScreen({ onClose, setItems, items, user, familyId, isPro, onPaywall }) {
   const [mode, setMode] = useState('choice');
+  const [receiptFreeUsed, setReceiptFreeUsed] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(RECEIPT_FREE_KEY).then(v => setReceiptFreeUsed(v === 'true'));
+  }, []);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -285,12 +292,20 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     const { data, error } = await supabase.from('items').insert(rows).select();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setReceiptSaving(false); return; }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Marque le scan ticket gratuit comme utilisé (une seule fois pour les non-Pro)
+    if (!isPro && !receiptFreeUsed) {
+      await AsyncStorage.setItem(RECEIPT_FREE_KEY, 'true');
+      setReceiptFreeUsed(true);
+    }
     setItems(prev => [...prev, ...(data || []).map((i, idx) => ({
       ...i, days: i.days_left, total_units: i.total_units || savedUnits[idx] || 1,
     }))]);
     posthog.capture('scan_completed', { method: 'receipt', products_count: rows.length, store: receiptData?.store || null, total: receiptData?.total || null });
     rows.forEach(r => posthog.capture('product_added', { method: 'receipt', name: r.name, brand: r.brand || null, category: r.category, location: r.location, has_dlc: r.dlc !== '—', price: r.price || null, quantity: r.quantity || 1 }));
-    Alert.alert('✅ Ajouté !', `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} au stock.`);
+    const alertMsg = !isPro && !receiptFreeUsed
+      ? `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} avec leurs prix réels.\n\nPasse à Frigy Pro pour scanner tous tes tickets sans limite 🎁`
+      : `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} au stock.`;
+    Alert.alert('✅ Ajouté !', alertMsg, [{ text: 'Super !', style: 'default' }]);
     setReceiptSaving(false);
     setReceiptData(null);
     setReceiptSelectedIds([]);
@@ -485,7 +500,17 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   };
 
   // ── CHOICE ──────────────────────────────────────────────────────────────────
+  const receiptFree = !isPro && !receiptFreeUsed; // scan gratuit disponible
   const ADD_METHODS = [
+    {
+      id: 'receipt', Icon: FileText,
+      title: 'Scan ticket de caisse',
+      badge: isPro ? 'ILLIMITÉ' : receiptFree ? '1 GRATUIT' : 'PRO',
+      description: "Prends en photo ton ticket de caisse pour extraire automatiquement tes produits et leurs prix réels.",
+      feature: isPro ? 'Produits + prix extraits' : receiptFree ? '🎁 Ton 1er scan offert' : '✦ Fonctionnalité Pro',
+      color: '#8B5CF6', iconBg: '#F3EFFE', badgeBg: '#EDE9FE', featureBg: '#F3EFFE',
+      pro: !isPro && !receiptFree,
+    },
     {
       id: 'barcode', Icon: Scan,
       title: 'Scanner code-barres', badge: 'GRATUIT',
@@ -502,21 +527,16 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
       color: '#E6A23C', iconBg: '#FEF6E7', badgeBg: '#FEF3DC', featureBg: '#FEF6E7',
       pro: !isPro,
     },
-    {
-      id: 'receipt', Icon: FileText,
-      title: 'Scan ticket de caisse', badge: isPro ? 'NOUVEAU' : 'PRO',
-      description: "Prends en photo ton ticket de caisse pour extraire automatiquement les produits et les prix.",
-      feature: isPro ? 'Produits et prix extraits' : '✦ Fonctionnalité Pro',
-      color: '#8B5CF6', iconBg: '#F3EFFE', badgeBg: '#EDE9FE', featureBg: '#F3EFFE',
-      pro: !isPro,
-    },
   ];
 
   const handleMethodPress = (id) => {
     posthog.capture('scan_started', { method: id });
     if (id === 'barcode') { if (!permission?.granted) requestPermission(); setMode('scanner'); }
     else if (id === 'photo') { if (!isPro) { onPaywall?.(); return; } setMode('photo'); }
-    else if (id === 'receipt') { if (!isPro) { onPaywall?.(); return; } setMode('receipt'); }
+    else if (id === 'receipt') {
+      if (isPro || receiptFree) { setMode('receipt'); }
+      else { onPaywall?.(); }
+    }
   };
 
   if (mode === 'choice') return (
