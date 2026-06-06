@@ -15,7 +15,7 @@ const CAT_EMOJI = {
   poisson: '🐟', pain: '🥖', boisson: '🧃', surgelé: '🧊', autre: '🍱',
 };
 
-export default function HomeScreen({ items, expiring, onNav, onUrgent, profileName, onItemPress, familyId, onShopping }) {
+export default function HomeScreen({ items, expiring, onNav, onUrgent, profileName, onItemPress, familyId, onShopping, streak = 0 }) {
   const firstName = profileName ? profileName.split(' ')[0] : '';
   const [monthlyStats, setMonthlyStats] = useState(null);
   const [wastedInsights, setWastedInsights] = useState(null);
@@ -60,7 +60,15 @@ export default function HomeScreen({ items, expiring, onNav, onUrgent, profileNa
       {/* ─── HEADER ─── */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 }}>
         <View>
-          <Text style={styles.headerSub}>{firstName ? `Bonjour ${firstName} 👋` : 'Bonjour 👋'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.headerSub}>{firstName ? `Bonjour ${firstName} 👋` : 'Bonjour 👋'}</Text>
+            {streak >= 2 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF3E0', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 13 }}>🔥</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#E65100' }}>{streak}j</Text>
+              </View>
+            )}
+          </View>
           <Image source={require('../../assets/logo-text.png')} style={{ height: 48, width: 165 }} resizeMode="contain" />
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>

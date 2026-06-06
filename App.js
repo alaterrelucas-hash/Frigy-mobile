@@ -49,6 +49,7 @@ export default function App() {
   const [shoppingOpen, setShoppingOpen]     = useState(false);
   const [fridgeUrgent, setFridgeUrgent] = useState(false);
   const [fridgeInitialItem, setFridgeInitialItem] = useState(null);
+  const [streak, setStreak] = useState(0);
 
   const { isPro, purchase, restore } = useSubscription();
 
@@ -84,10 +85,28 @@ export default function App() {
     await supabase.rpc('setup_user_profile');
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, family_id, name')
+      .select('id, family_id, name, streak, last_opened')
       .eq('id', userId)
       .single();
     if (profile?.family_id) {
+      // Calcul du streak
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().slice(0, 10);
+      let newStreak;
+      if (!profile.last_opened) {
+        newStreak = 1;
+      } else if (profile.last_opened === today) {
+        newStreak = profile.streak || 1;
+      } else if (profile.last_opened === yesterdayStr) {
+        newStreak = (profile.streak || 0) + 1;
+      } else {
+        newStreak = 1;
+      }
+      if (profile.last_opened !== today) {
+        await supabase.from('profiles').update({ streak: newStreak, last_opened: today }).eq('id', userId);
+      }
+      setStreak(newStreak);
       const finalName = name && (!profile.name || profile.name === 'Utilisateur') ? name : (profile.name || '');
       if (name && (!profile.name || profile.name === 'Utilisateur')) {
         await supabase.from('profiles').update({ name }).eq('id', userId);
@@ -169,7 +188,7 @@ export default function App() {
         <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }} />
       ) : (
         <SafeAreaView style={styles.safe}>
-          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} />}
+          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} streak={streak} />}
           {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
           {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={async (prefs) => { if (!prefs.pushEnabled) { await Notifications.cancelAllScheduledNotificationsAsync(); } else if (items.length > 0) { scheduleExpiryNotifications(items); } }} />}
