@@ -61,15 +61,16 @@ function RecipeModal({ recipe, onClose, expiringItems }) {
             {recipe.imgUrl
               ? <Image source={{ uri: recipe.imgUrl }} style={{ width: '100%', height: 300 }} resizeMode="cover" />
               : <Leaf size={64} color={C.green} strokeWidth={1.2} />}
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-              background: 'linear-gradient(transparent, rgba(0,0,0,0.3))' }} />
+            {/* Gradient overlay — implémenté en RN sans LinearGradient */}
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120,
+              backgroundColor: 'rgba(0,0,0,0.28)' }} />
           </View>
 
-          {/* Back button — positionné sur l'image */}
+          {/* Back button */}
           <SafeAreaView edges={['top']} style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
             <TouchableOpacity onPress={onClose}
               style={{ margin: 16, width: 40, height: 40, borderRadius: 20,
-                backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
+                backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
               <ChevronLeft size={22} color="#fff" strokeWidth={2.5} />
             </TouchableOpacity>
           </SafeAreaView>
@@ -293,32 +294,60 @@ export default function RecipesScreen({ items, user }) {
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} showsVerticalScrollIndicator={false}>
       <RecipeModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} expiringItems={expiring} />
 
-      {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+      {/* ─── HEADER ─── */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>
-            Recettes
-          </Text>
+          <View>
+            <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>Recettes</Text>
+            <Text style={{ fontSize: 14, color: C.t3, marginTop: 4 }}>
+              {expiring.length > 0
+                ? `Basées sur ${expiring.length} produit${expiring.length > 1 ? 's' : ''} qui expirent bientôt`
+                : 'Basées sur ton stock du moment'}
+            </Text>
+          </View>
           {canRefresh && (
             <TouchableOpacity onPress={() => loadRecipes(true)} disabled={loading}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6,
                 paddingHorizontal: 14, paddingVertical: 9,
                 backgroundColor: `${C.green}15`, borderRadius: 999,
-                opacity: loading ? 0.5 : 1, marginTop: 8 }}>
+                opacity: loading ? 0.5 : 1, marginTop: 10 }}>
               <RefreshCw size={13} color={C.green} strokeWidth={2.5} />
               <Text style={{ fontSize: 13, color: C.green, fontWeight: '700' }}>Rafraîchir</Text>
             </TouchableOpacity>
           )}
         </View>
-        <Text style={{ fontSize: 15, color: C.t3, marginTop: 4, marginBottom: 20 }}>
-          Basées sur ton stock du moment
-        </Text>
       </View>
 
-      {/* Search */}
+      {/* ─── EXPIRING CHIPS ─── */}
+      {expiring.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 16 }}>
+          {expiring.slice(0, 6).map(p => {
+            const critical = p.days <= 1;
+            return (
+              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6,
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14,
+                backgroundColor: critical ? '#FFF0F0' : C.card,
+                borderWidth: 1, borderColor: critical ? '#FFD0CC' : C.border }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3,
+                  backgroundColor: critical ? '#FF3B30' : '#FF9500' }} />
+                <Text style={{ fontSize: 12, fontWeight: '700',
+                  color: critical ? '#FF3B30' : C.t2 }} numberOfLines={1}>
+                  {p.emoji} {p.name}
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '800',
+                  color: critical ? '#FF3B30' : '#FF9500' }}>J-{p.days}</Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* ─── SEARCH ─── */}
       <View style={{ marginHorizontal: 16, marginBottom: 20, flexDirection: 'row', alignItems: 'center',
-        backgroundColor: C.card, borderRadius: 16, paddingHorizontal: 14, height: 50, gap: 10,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6 }}>
+        backgroundColor: C.card, borderRadius: 18, paddingHorizontal: 16, height: 52, gap: 10,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6,
+        borderWidth: 1, borderColor: C.border }}>
         <Search size={16} color={C.t3} strokeWidth={2} />
         <TextInput
           value={searchQuery}
@@ -329,85 +358,87 @@ export default function RecipesScreen({ items, user }) {
         />
       </View>
 
-      {/* Expiring chips */}
-      {expiring.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 20 }}>
-          {expiring.slice(0, 6).map(p => {
-            const critical = p.days <= 1;
-            return (
-              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6,
-                paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-                backgroundColor: critical ? '#FFF0F0' : '#FFFBEB' }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: critical ? '#FF3B30' : '#F5B700' }}>
-                  J-{Math.abs(p.days)}
-                </Text>
-                <Text style={{ fontSize: 12, color: critical ? '#FF3B30' : '#92661A', maxWidth: 100 }}
-                  numberOfLines={1}>{p.name}</Text>
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
-
       <View style={{ paddingHorizontal: 16, paddingBottom: 40 }}>
 
-        {/* Loading */}
+        {/* ─── LOADING ─── */}
         {loading && (
-          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+          <View style={{ alignItems: 'center', paddingVertical: 48, gap: 14 }}>
             <ActivityIndicator color={C.green} size="large" />
-            <Text style={{ marginTop: 16, fontSize: 15, fontWeight: '600', color: C.t2 }}>
-              Génération des recettes…
+            <Text style={{ fontSize: 15, fontWeight: '700', color: C.t2 }}>Génération des recettes…</Text>
+            <Text style={{ fontSize: 13, color: C.t3, textAlign: 'center' }}>
+              L'IA analyse ton stock pour te proposer{'\n'}les meilleures idées
             </Text>
           </View>
         )}
 
-        {/* Empty */}
+        {/* ─── EMPTY ─── */}
         {!loading && recipes.length === 0 && loaded && (
-          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: `${C.green}12`,
-              alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-              <UtensilsCrossed size={32} color={C.t4} strokeWidth={1.2} />
+          <View style={{ alignItems: 'center', paddingVertical: 56, paddingHorizontal: 24 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: `${C.green}12`,
+              alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <UtensilsCrossed size={36} color={C.green} strokeWidth={1.5} />
             </View>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: C.t1, marginBottom: 6 }}>
-              Pas assez de produits
+            <Text style={{ fontSize: 20, fontWeight: '900', color: C.t1, letterSpacing: -0.5, marginBottom: 8 }}>
+              Pas encore de recettes
             </Text>
-            <Text style={{ fontSize: 14, color: C.t3, textAlign: 'center', lineHeight: 20 }}>
-              Scanne des courses pour obtenir des suggestions
+            <Text style={{ fontSize: 14, color: C.t3, textAlign: 'center', lineHeight: 21 }}>
+              Scanne au moins 2 produits dans ton frigo pour que Frigy te génère des idées de recettes.
             </Text>
           </View>
         )}
 
-        {/* Recipe cards */}
+        {/* ─── RECIPE CARDS ─── */}
         {!loading && filteredRecipes.map((r, i) => {
           const { urgent } = splitIngredients(r.ingredients, expiring);
           const isFav = favorites.has(r.name);
 
           return (
-            <TouchableOpacity key={i} activeOpacity={0.95} onPress={() => setSelectedRecipe(r)}
+            <TouchableOpacity key={i} activeOpacity={0.93} onPress={() => setSelectedRecipe(r)}
               style={{ backgroundColor: C.card, borderRadius: 24, marginBottom: 16, overflow: 'hidden',
-                shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.07, shadowRadius: 12 }}>
+                shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.08, shadowRadius: 14 }}>
 
               {/* Image */}
-              <View style={{ height: 180, backgroundColor: '#EAF8EE',
+              <View style={{ height: 220, backgroundColor: '#EAF8EE',
                 alignItems: 'center', justifyContent: 'center' }}>
                 {r.imgUrl
-                  ? <Image source={{ uri: r.imgUrl }} style={{ width: '100%', height: 180 }} resizeMode="cover" />
-                  : <Leaf size={40} color={C.green} strokeWidth={1.2} />}
+                  ? <Image source={{ uri: r.imgUrl }} style={{ width: '100%', height: 220 }} resizeMode="cover" />
+                  : (
+                    <View style={{ alignItems: 'center', gap: 10 }}>
+                      <Leaf size={44} color={C.green} strokeWidth={1.2} />
+                      <Text style={{ fontSize: 13, color: C.green, fontWeight: '600' }}>Photo à venir</Text>
+                    </View>
+                  )}
+
+                {/* Overlay bas */}
+                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
+                  backgroundColor: 'rgba(0,0,0,0.25)' }} />
 
                 {/* Favori */}
                 <TouchableOpacity onPress={() => toggleFavorite(r.name)}
-                  style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: 18,
-                    backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Heart size={16} color={isFav ? C.green : C.t3} strokeWidth={2}
-                    fill={isFav ? C.green : 'none'} />
+                  style={{ position: 'absolute', top: 12, right: 12, width: 38, height: 38, borderRadius: 19,
+                    backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center',
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4 }}>
+                  <Heart size={17} color={isFav ? '#FF3B30' : C.t3} strokeWidth={2}
+                    fill={isFav ? '#FF3B30' : 'none'} />
                 </TouchableOpacity>
+
+                {/* Badge urgents sur image */}
+                {urgent.length > 0 && (
+                  <View style={{ position: 'absolute', top: 12, left: 12,
+                    paddingHorizontal: 10, paddingVertical: 5,
+                    backgroundColor: 'rgba(255,59,48,0.88)', borderRadius: 100 }}>
+                    <Text style={{ fontSize: 11, color: '#fff', fontWeight: '800' }}>
+                      🔴 {urgent.length} à consommer
+                    </Text>
+                  </View>
+                )}
 
                 {/* Badge économies */}
                 {r.saves && (
                   <View style={{ position: 'absolute', bottom: 12, left: 12,
-                    paddingHorizontal: 10, paddingVertical: 5, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 100 }}>
+                    paddingHorizontal: 10, paddingVertical: 5,
+                    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 100 }}>
                     <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>−{r.saves}€ économisés</Text>
                   </View>
                 )}
@@ -415,37 +446,25 @@ export default function RecipesScreen({ items, user }) {
 
               {/* Content */}
               <View style={{ padding: 16 }}>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: C.t1, letterSpacing: -0.3, marginBottom: 4 }}
+                <Text style={{ fontSize: 18, fontWeight: '900', color: C.t1,
+                  letterSpacing: -0.5, marginBottom: 5, lineHeight: 24 }}
                   numberOfLines={2}>{r.name}</Text>
 
                 {r.desc && (
-                  <Text style={{ fontSize: 13, color: C.t3, lineHeight: 18, marginBottom: 10 }}
+                  <Text style={{ fontSize: 13, color: C.t3, lineHeight: 19, marginBottom: 12 }}
                     numberOfLines={2}>{r.desc}</Text>
                 )}
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {/* Temps */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
-                    paddingHorizontal: 10, paddingVertical: 5, backgroundColor: `${C.green}12`, borderRadius: 100 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5,
+                    paddingHorizontal: 11, paddingVertical: 6, backgroundColor: `${C.green}12`, borderRadius: 100 }}>
                     <Clock size={12} color={C.green} strokeWidth={2.5} />
                     <Text style={{ fontSize: 12, color: C.green, fontWeight: '700' }}>{r.time}</Text>
                   </View>
-
-                  {/* Difficulté */}
-                  <View style={{ paddingHorizontal: 10, paddingVertical: 5,
-                    backgroundColor: C.bg, borderRadius: 100 }}>
-                    <Text style={{ fontSize: 12, color: C.t3, fontWeight: '600' }}>{r.diff}</Text>
+                  <View style={{ paddingHorizontal: 11, paddingVertical: 6,
+                    backgroundColor: C.bg, borderRadius: 100, borderWidth: 1, borderColor: C.border }}>
+                    <Text style={{ fontSize: 12, color: C.t2, fontWeight: '600' }}>{r.diff}</Text>
                   </View>
-
-                  {/* Ingrédients urgents */}
-                  {urgent.length > 0 && (
-                    <View style={{ paddingHorizontal: 10, paddingVertical: 5,
-                      backgroundColor: '#FFF0F0', borderRadius: 100 }}>
-                      <Text style={{ fontSize: 12, color: '#FF3B30', fontWeight: '700' }}>
-                        {urgent.length} urgent{urgent.length > 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                  )}
                 </View>
               </View>
             </TouchableOpacity>
