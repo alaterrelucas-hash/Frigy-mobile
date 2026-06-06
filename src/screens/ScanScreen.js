@@ -973,9 +973,9 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
                     <TouchableOpacity key={l.id} onPress={() => updateReceiptLocation(p._id, l.id)}
                       style={{ flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 8, borderWidth: 1.5,
                         borderColor: active ? '#8B5CF6' : C.border,
-                        backgroundColor: active ? '#8B5CF615' : '#FAFAFA' }}>
+                        backgroundColor: active ? '#EDE9FE' : '#FAFAFA' }}>
                       <l.Icon size={16} color={active ? '#8B5CF6' : C.t3} strokeWidth={active ? 2.5 : 1.8} />
-                      <Text style={{ fontSize: 9, fontWeight: '600', color: active ? '#8B5CF6' : C.t3, marginTop: 1 }}>{l.id}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: active ? '#8B5CF6' : C.t3, marginTop: 1 }}>{l.id}</Text>
                     </TouchableOpacity>
                   );
                 })}
