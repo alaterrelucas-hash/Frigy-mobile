@@ -11,7 +11,7 @@ import {
 import { supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
 import { C, urgBg, urgLbl, LOC_ITEMS, SCREEN_W } from '../config/constants';
-import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays } from '../utils/product';
+import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays, estimateDays } from '../utils/product';
 import { styles } from '../styles';
 
 const BG    = '#F7F9F8';
@@ -168,13 +168,13 @@ export default function FridgeScreen({
       updates.dlc = newDlc;
       updates.days_left = daysLeft;
     } else {
-      // Restaure la DLC originale
+      // Restaure la DLC originale — fallback sur estimateDays si jamais stockée
       updates.dlc = item.original_dlc || '—';
-      updates.days_left = item.original_days_left ?? null;
+      updates.days_left = item.original_days_left ?? estimateDays(item.category, item.name);
       updates.original_dlc = null;
       updates.original_days_left = null;
     }
-    const newDays = newVal ? updates.days_left : (updates.days_left ?? item.days);
+    const newDays = updates.days_left;
     updateItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newDays } : x));
     setSelectedItem(prev => ({ ...prev, ...updates, days: newDays }));
     await supabase.from('items').update(updates).eq('id', item.id);
