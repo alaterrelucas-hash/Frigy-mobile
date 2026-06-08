@@ -78,15 +78,20 @@ export default function FridgeScreen({
   const [editMode, setEditMode]           = useState(false);
   const [editFields, setEditFields]       = useState({});
   const [detailImgError, setDetailImgError] = useState(false);
+  const [localItems, setLocalItems]       = useState(items);
   const locScrollRef = useRef(null);
   const [restLoc, setRestLoc]             = useState(0);
+
+  useEffect(() => { setLocalItems(items); }, [items]);
+
+  const updateItems = (updater) => { setItems(updater); setLocalItems(updater); };
 
   useEffect(() => {
     if (initialItem) { setSelectedItem(initialItem); onInitialItemConsumed?.(); }
   }, [initialItem]);
 
-  const urgent = items.filter(i => i.days <= 4).sort((a, b) => a.days - b.days);
-  const rest   = items.filter(i => i.days > 4).sort((a, b) => a.days - b.days);
+  const urgent = localItems.filter(i => i.days <= 4).sort((a, b) => a.days - b.days);
+  const rest   = localItems.filter(i => i.days > 4).sort((a, b) => a.days - b.days);
 
   const applyFilter = (list) => {
     let out = list;
@@ -115,7 +120,7 @@ export default function FridgeScreen({
       days_left: dlcDays !== null ? dlcDays : selectedItem.days_left,
       location: editFields.location,
     };
-    setItems(p => p.map(x => x.id === selectedItem.id ? { ...x, ...updates, days: updates.days_left } : x));
+    updateItems(p => p.map(x => x.id === selectedItem.id ? { ...x, ...updates, days: updates.days_left } : x));
     setSelectedItem(prev => ({ ...prev, ...updates, days: updates.days_left }));
     setEditMode(false);
     await supabase.from('items').update(updates).eq('id', selectedItem.id);
@@ -123,7 +128,7 @@ export default function FridgeScreen({
 
   const consumeItem = async (item, wasted = false) => {
     Haptics.impactAsync(wasted ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
-    setItems(p => p.filter(x => x.id !== item.id));
+    updateItems(p => p.filter(x => x.id !== item.id));
     setSelectedItem(null);
     await supabase.from('items').update({ consumed: true, wasted }).eq('id', item.id);
     posthog.capture(wasted ? 'product_wasted' : 'product_consumed', {
@@ -138,12 +143,12 @@ export default function FridgeScreen({
       Alert.alert('Épuisé !', `Dernier ${item.name} utilisé. Le marquer comme consommé ?`, [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Consommé ✅', onPress: async () => {
-          setItems(p => p.filter(x => x.id !== item.id));
+          updateItems(p => p.filter(x => x.id !== item.id));
           await supabase.from('items').update({ consumed: true }).eq('id', item.id);
         }},
       ]);
     } else {
-      setItems(p => p.map(x => x.id === item.id ? { ...x, quantity: newQty } : x));
+      updateItems(p => p.map(x => x.id === item.id ? { ...x, quantity: newQty } : x));
       await supabase.from('items').update({ quantity: newQty }).eq('id', item.id);
     }
   };
@@ -153,7 +158,6 @@ export default function FridgeScreen({
     const updates = { opened: newVal, opened_at: newVal ? today.toISOString().split('T')[0] : null };
     if (newVal) {
       const openDays = estimateOpeningDays(item.category, item.name);
-      // Ne jamais allonger la DLC au-delà de l'originale
       const daysLeft = (item.days != null && item.days < openDays) ? item.days : openDays;
       const exp = new Date(today);
       exp.setDate(exp.getDate() + daysLeft);
@@ -161,7 +165,7 @@ export default function FridgeScreen({
       updates.dlc = newDlc;
       updates.days_left = daysLeft;
     }
-    setItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newVal ? updates.days_left : x.days } : x));
+    updateItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newVal ? updates.days_left : x.days } : x));
     setSelectedItem(prev => ({ ...prev, ...updates, days: newVal ? updates.days_left : prev.days }));
     await supabase.from('items').update(updates).eq('id', item.id);
   };
@@ -453,7 +457,7 @@ export default function FridgeScreen({
           </ScrollView>
         </View>
       )}
-      {items.length === 0 && (
+      {localItems.length === 0 && (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Inbox size={52} color={C.t4} strokeWidth={1.2} style={{ marginBottom: 12 }} />
           <Text style={{ fontSize: 15, fontWeight: '600', color: C.t2 }}>Frigo vide</Text>
@@ -484,7 +488,7 @@ export default function FridgeScreen({
         {/* ─── STORAGE TABS ─── */}
         <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 20 }}>
           {STORAGE_TABS.map(tab => {
-            const cnt = items.filter(i => i.location === tab.id).length;
+            const cnt = localItems.filter(i => i.location === tab.id).length;
             const isActive = expanded.has(tab.id);
             return (
               <TouchableOpacity key={tab.id} onPress={() => toggleSection(tab.id)}
@@ -502,7 +506,7 @@ export default function FridgeScreen({
         </View>
 
         {/* ─── EMPTY STATE ─── */}
-        {items.length === 0 && (
+        {localItems.length === 0 && (
           <View style={{ alignItems: 'center', paddingTop: 32, paddingHorizontal: 32, paddingBottom: 40 }}>
             <Image
               source={require('../../assets/fridge.png')}
@@ -524,7 +528,7 @@ export default function FridgeScreen({
         )}
 
         {/* ─── SEARCH + SECTIONS ─── */}
-        {items.length > 0 && (<>
+        {localItems.length > 0 && (<>
         <View style={{ marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center',
           backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, height: 54,
           shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6,
@@ -573,7 +577,7 @@ export default function FridgeScreen({
                   backgroundColor: tab.secBg }}>
                 <tab.Icon size={17} color={tab.color} strokeWidth={2} style={{ marginRight: 8 }} />
                 <Text style={{ flex: 1, fontSize: 13, fontWeight: '800', color: tab.color, letterSpacing: 0.5 }}>
-                  {tab.id.toUpperCase()} ({items.filter(i => i.location === tab.id).length})
+                  {tab.id.toUpperCase()} ({localItems.filter(i => i.location === tab.id).length})
                 </Text>
                 {isExpanded
                   ? <ChevronUp size={18} color={GREY} strokeWidth={2} />
