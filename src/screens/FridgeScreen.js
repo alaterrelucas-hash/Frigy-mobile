@@ -149,6 +149,7 @@ export default function FridgeScreen({
   };
 
   const toggleOpened = async (item, newVal) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const today = new Date();
     const updates = { opened: newVal, opened_at: newVal ? today.toISOString().split('T')[0] : null };
     if (newVal) {
