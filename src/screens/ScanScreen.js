@@ -332,7 +332,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
         searchOpenFoodFacts(data),
       ]);
       if (cached) {
-        const imgUrl = spoonFresh?.imgUrl || offFresh?.imgUrl || cached.img_url || null;
+        const imgUrl = offFresh?.imgUrl || spoonFresh?.imgUrl || cached.img_url || null;
         setResult({
           barcode: data, name: cached.name, brand: cached.brand || '',
           nutri: cached.nutri_grade, kcal: cached.kcal, emoji: '🛒',
