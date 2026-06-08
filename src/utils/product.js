@@ -202,7 +202,7 @@ export function estimateDays(category, name) {
       n.includes('homard') || n.includes('langoustine')) return 2;
 
   // ── LAITAGES ──
-  if (n.includes('lait')) return 5;
+  if (n.includes('lait')) return 10;
   if (n.includes('crème fraîche') || n.includes('crème épaisse')) return 10;
   if (n.includes('crème liquide') || n.includes('crème fleurette')) return 7;
   if (n.includes('yaourt') || n.includes('yogurt') || n.includes('skyr') || n.includes('kéfir')) return 21;
@@ -313,7 +313,7 @@ export function estimateOpeningDays(category, name) {
   const c = (category || '').toLowerCase();
 
   // ── LAITAGES ──
-  if (n.includes('lait')) return 5;
+  if (n.includes('lait')) return 3;
   if (n.includes('crème fraîche') || n.includes('crème épaisse')) return 5;
   if (n.includes('crème liquide') || n.includes('crème fleurette')) return 4;
   if (n.includes('yaourt') || n.includes('yogurt') || n.includes('skyr') || n.includes('kéfir')) return 7;
@@ -325,9 +325,9 @@ export function estimateOpeningDays(category, name) {
   if (n.includes('comté') || n.includes('gruyère') || n.includes('emmental') ||
       n.includes('cheddar') || n.includes('parmesan') || n.includes('gouda') ||
       n.includes('mimolette') || n.includes('beaufort')) return 21;
-  if (n.includes('fromage') || c === 'laitage') return 7;
+  if (n.includes('fromage') || c === 'laitage') return 5;
   if (n.includes('beurre') || n.includes('margarine')) return 30;
-  if (n.includes('crème') || n.includes('creme')) return 5;
+  if (n.includes('crème') || n.includes('creme')) return 4;
 
   // ── CHARCUTERIE ──
   if (n.includes('jambon cru') || n.includes('prosciutto') || n.includes('coppa')) return 7;
