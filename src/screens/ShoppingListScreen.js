@@ -62,7 +62,6 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
   };
 
   const toggleItem = async (item) => {
-    Haptics.impactAsync(item.checked ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
     const updated = { ...item, checked: !item.checked };
     setItems(prev => prev.map(i => i.id === item.id ? updated : i));
     await supabase.from('shopping_items').update({ checked: updated.checked }).eq('id', item.id);
