@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
   Search, ScanLine,
@@ -153,11 +153,13 @@ export default function FridgeScreen({
     const updates = { opened: newVal, opened_at: newVal ? today.toISOString().split('T')[0] : null };
     if (newVal) {
       const openDays = estimateOpeningDays(item.category, item.name);
+      // Ne jamais allonger la DLC au-delà de l'originale
+      const daysLeft = (item.days != null && item.days < openDays) ? item.days : openDays;
       const exp = new Date(today);
-      exp.setDate(exp.getDate() + openDays);
+      exp.setDate(exp.getDate() + daysLeft);
       const newDlc = `${String(exp.getDate()).padStart(2,'0')}/${String(exp.getMonth()+1).padStart(2,'0')}/${exp.getFullYear()}`;
       updates.dlc = newDlc;
-      updates.days_left = openDays;
+      updates.days_left = daysLeft;
     }
     setItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newVal ? updates.days_left : x.days } : x));
     setSelectedItem(prev => ({ ...prev, ...updates, days: newVal ? updates.days_left : prev.days }));
@@ -227,6 +229,7 @@ export default function FridgeScreen({
 
     return (
       <Modal visible animationType="slide" transparent onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
           activeOpacity={1} onPress={editMode ? () => {} : closeModal}>
           <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -395,6 +398,7 @@ export default function FridgeScreen({
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };

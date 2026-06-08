@@ -346,7 +346,7 @@ export function estimateOpeningDays(category, name) {
   if (n.includes('conserve') || n.includes('boîte de')) return 3;
 
   // ── JUS & BOISSONS ──
-  if (n.includes('jus frais') || n.includes('jus pressé') || n.includes('smoothie')) return 3;
+  if ((n.includes('jus') && n.includes('frais')) || n.includes('jus pressé') || n.includes('smoothie')) return 3;
   if (n.includes('jus') || c === 'boisson') return 7;
 
   // ── PAIN ──
