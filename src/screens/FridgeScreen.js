@@ -157,6 +157,9 @@ export default function FridgeScreen({
     const today = new Date();
     const updates = { opened: newVal, opened_at: newVal ? today.toISOString().split('T')[0] : null };
     if (newVal) {
+      // Sauvegarde la DLC originale avant de la modifier
+      updates.original_dlc = item.dlc || '—';
+      updates.original_days_left = item.days ?? null;
       const openDays = estimateOpeningDays(item.category, item.name);
       const daysLeft = (item.days != null && item.days < openDays) ? item.days : openDays;
       const exp = new Date(today);
@@ -164,9 +167,16 @@ export default function FridgeScreen({
       const newDlc = `${String(exp.getDate()).padStart(2,'0')}/${String(exp.getMonth()+1).padStart(2,'0')}/${exp.getFullYear()}`;
       updates.dlc = newDlc;
       updates.days_left = daysLeft;
+    } else {
+      // Restaure la DLC originale
+      updates.dlc = item.original_dlc || '—';
+      updates.days_left = item.original_days_left ?? null;
+      updates.original_dlc = null;
+      updates.original_days_left = null;
     }
-    updateItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newVal ? updates.days_left : x.days } : x));
-    setSelectedItem(prev => ({ ...prev, ...updates, days: newVal ? updates.days_left : prev.days }));
+    const newDays = newVal ? updates.days_left : (updates.days_left ?? item.days);
+    updateItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newDays } : x));
+    setSelectedItem(prev => ({ ...prev, ...updates, days: newDays }));
     await supabase.from('items').update(updates).eq('id', item.id);
   };
 
