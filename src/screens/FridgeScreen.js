@@ -337,7 +337,11 @@ export default function FridgeScreen({
                       <Sparkles size={16} color={C.yellow} strokeWidth={2} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 10, fontWeight: '800', color: C.yellow, marginBottom: 4, letterSpacing: 0.5 }}>CONSEIL DE CONSERVATION</Text>
-                        <Text style={{ fontSize: 13, color: C.t2, lineHeight: 19 }}>{getStorageTip(item.category, item.name)}</Text>
+                        <Text style={{ fontSize: 13, color: C.t2, lineHeight: 19 }}>
+                          {item.opened
+                            ? `Produit ouvert — à consommer dans les ${estimateOpeningDays(item.category, item.name)} jours. Bien refermer après chaque utilisation.`
+                            : getStorageTip(item.category, item.name)}
+                        </Text>
                       </View>
                     </View>
 
