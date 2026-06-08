@@ -145,18 +145,31 @@ export default function App() {
 
   const scheduleExpiryNotifications = async (currentItems) => {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    const expiring48h = currentItems.filter(i => i.days >= 0 && i.days <= 2);
-    if (!expiring48h.length) return;
-    const body = expiring48h.length === 1
-      ? `${expiring48h[0].emoji} ${expiring48h[0].name} expire ${expiring48h[0].days === 0 ? "aujourd'hui" : expiring48h[0].days === 1 ? 'demain' : 'dans 2 jours'} !`
-      : `${expiring48h.length} produits à consommer rapidement : ${expiring48h.map(i => `${i.emoji} ${i.name}`).join(', ')}`;
-    const trigger = new Date();
-    trigger.setHours(9, 0, 0, 0);
-    if (trigger <= new Date()) trigger.setDate(trigger.getDate() + 1);
-    await Notifications.scheduleNotificationAsync({
-      content: { title: '⚠️ Frigy — Produits à consommer !', body, sound: true },
-      trigger,
-    });
+    const urgent = currentItems
+      .filter(i => i.days >= 0 && i.days <= 3)
+      .sort((a, b) => a.days - b.days)
+      .slice(0, 3);
+    if (!urgent.length) return;
+    const now = new Date();
+    for (const item of urgent) {
+      const trigger = new Date();
+      if (item.days === 0) {
+        trigger.setHours(18, 0, 0, 0);
+        if (trigger <= now) continue;
+      } else {
+        trigger.setDate(trigger.getDate() + item.days);
+        trigger.setHours(9, 0, 0, 0);
+      }
+      const when = item.days === 0 ? "aujourd'hui" : item.days === 1 ? 'demain' : `dans ${item.days} jours`;
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `${item.emoji} ${item.name}`,
+          body: `À consommer ${when} — ouvre Frigy pour une idée recette 👨‍🍳`,
+          sound: true,
+        },
+        trigger,
+      });
+    }
   };
 
   useEffect(() => {
