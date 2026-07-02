@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 // Remplace par tes clés RevenueCat (app.revenuecat.com > Projet > API Keys)
 export const RC_API_KEY = Platform.select({
-  ios:     'test_fNfbiURnfChBjvRXhhGHpHviopv',
+  ios:     'appl_hbGGqXzTrHtAPjdPIPfkPZHdVFQ',
   android: 'test_fNfbiURnfChBjvRXhhGHpHviopv',
 });
 

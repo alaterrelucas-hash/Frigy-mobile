@@ -25,7 +25,7 @@ import ProfileScreen    from './src/screens/ProfileScreen';
 import ScanScreen       from './src/screens/ScanScreen';
 import PaywallScreen    from './src/screens/PaywallScreen';
 
-initSentry();
+try { initSentry(); } catch {}
 
 class ErrorBoundary extends Component {
   state = { hasError: false };
@@ -83,8 +83,12 @@ function App() {
   const { isPro, purchase, restore } = useSubscription();
 
   useEffect(() => {
-    if (Purchases && RC_API_KEY && !RC_API_KEY.includes('XXXX')) {
-      Purchases.configure({ apiKey: RC_API_KEY });
+    try {
+      if (Purchases && RC_API_KEY) {
+        Purchases.configure({ apiKey: RC_API_KEY });
+      }
+    } catch (e) {
+      try { Sentry.captureException(e); } catch {}
     }
   }, []);
 
