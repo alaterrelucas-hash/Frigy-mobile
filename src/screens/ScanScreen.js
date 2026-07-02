@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { Camera, ChevronLeft, ChevronRight, RefreshCw, Scan, FileText, CheckCircle2, ShieldCheck, X, Lightbulb, Image as ImageIcon, Sparkles } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { SUPABASE_KEY } from '../config/supabase';

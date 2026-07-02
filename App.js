@@ -1,12 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Home, Refrigerator, Apple, User, Plus } from 'lucide-react-native';
 
 import { supabase } from './src/config/supabase';
+import { initSentry, Sentry } from './src/config/sentry';
 import { posthog } from './src/config/posthog';
 import { C } from './src/config/constants';
 import { styles } from './src/styles';
@@ -24,6 +25,34 @@ import ProfileScreen    from './src/screens/ProfileScreen';
 import ScanScreen       from './src/screens/ScanScreen';
 import PaywallScreen    from './src/screens/PaywallScreen';
 
+initSentry();
+
+class ErrorBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error) {
+    try { Sentry.captureException(error); } catch {}
+  }
+  render() {
+    if (this.state.hasError) return (
+      <SafeAreaProvider>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#FAFAF8' }}>
+          <Text style={{ fontSize: 26, fontWeight: '900', color: '#1C1C1E', marginBottom: 10, textAlign: 'center' }}>Une erreur est survenue</Text>
+          <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
+            Frigy a rencontré un problème inattendu. L'équipe a été notifiée automatiquement.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#3DB33F', padding: 16, borderRadius: 14, width: '100%', alignItems: 'center' }}
+            onPress={() => this.setState({ hasError: false })}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Réessayer</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+    return this.props.children;
+  }
+}
+
 // Init RevenueCat si installé
 let Purchases = null;
 try { Purchases = require('react-native-purchases').default; } catch { /* not installed yet */ }
@@ -36,7 +65,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export default function App() {
+function App() {
   const [tab, setTab] = useState('home');
   const [items, setItems] = useState([]);
   const [user, setUser] = useState(null);
@@ -82,6 +111,7 @@ export default function App() {
   }, []);
 
   const setupProfile = async (userId, name = null) => {
+    try {
     await supabase.rpc('setup_user_profile');
     const { data: profile } = await supabase
       .from('profiles')
@@ -117,6 +147,9 @@ export default function App() {
       setFamilyId(profile.family_id);
       fetchItems(profile.family_id);
       posthog.identify(userId, { name: finalName, family_id: profile.family_id });
+    }
+    } catch (e) {
+      try { Sentry.captureException(e); } catch {}
     }
   };
 
@@ -257,5 +290,13 @@ export default function App() {
         </SafeAreaView>
       )}
     </SafeAreaProvider>
+  );
+}
+
+export default function AppRoot() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   );
 }
