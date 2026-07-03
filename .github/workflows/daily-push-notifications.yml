@@ -1,0 +1,18 @@
+name: Daily push notifications
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # 9h heure Paris (UTC+2 été, UTC+1 hiver)
+  workflow_dispatch:       # permet de déclencher manuellement depuis GitHub
+
+jobs:
+  send-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Edge Function
+        run: |
+          curl -s -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/send-push-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
