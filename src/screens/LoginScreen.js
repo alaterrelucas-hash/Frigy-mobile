@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../config/supabase';
 import { C } from '../config/constants';
 import { styles } from '../styles';
@@ -11,7 +12,42 @@ export default function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    setError('');
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const { data, error: e } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (e) { setError(e.message); return; }
+      // Apple fournit le nom uniquement au 1er login
+      const fullName = credential.fullName
+        ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ')
+        : null;
+      onLogin(data.user, fullName);
+    } catch (e) {
+      if (e.code !== 'ERR_REQUEST_CANCELED') {
+        setError("Connexion Apple impossible. Réessaie ou utilise email/mot de passe.");
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  };
 
   const handleAuth = async () => {
     if (!email || !password) { setError('Remplis tous les champs'); return; }
@@ -35,14 +71,37 @@ export default function LoginScreen({ onLogin }) {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+
         <View style={{ alignItems: 'center', marginBottom: 36, marginTop: 40 }}>
           <Image
             source={require('../../assets/logo-text.png')}
             style={{ width: 160, height: 56 }}
             resizeMode="contain"
           />
-          <Text style={{ fontSize: 15, color: C.t3, marginTop: 10 }}>{mode === 'login' ? 'Bon retour !' : 'Crée ton compte'}</Text>
+          <Text style={{ fontSize: 15, color: C.t3, marginTop: 10 }}>
+            {mode === 'login' ? 'Bon retour !' : 'Crée ton compte'}
+          </Text>
         </View>
+
+        {/* Sign in with Apple */}
+        {appleAvailable && (
+          <View style={{ marginBottom: 20 }}>
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={mode === 'login'
+                ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                : AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={14}
+              style={{ width: '100%', height: 50 }}
+              onPress={handleAppleSignIn}
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 4 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+              <Text style={{ marginHorizontal: 12, fontSize: 12, color: C.t3 }}>ou</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+            </View>
+          </View>
+        )}
 
         {mode === 'signup' && (
           <View style={{ marginBottom: 16 }}>
@@ -80,7 +139,7 @@ export default function LoginScreen({ onLogin }) {
 
         <TouchableOpacity
           style={{ backgroundColor: C.green, padding: 15, borderRadius: 14, alignItems: 'center' }}
-          onPress={handleAuth} disabled={loading}>
+          onPress={handleAuth} disabled={loading || appleLoading}>
           {loading
             ? <ActivityIndicator color="#fff" />
             : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
@@ -98,6 +157,7 @@ export default function LoginScreen({ onLogin }) {
             </Text>
           </Text>
         </TouchableOpacity>
+
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
