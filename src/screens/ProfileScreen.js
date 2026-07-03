@@ -656,8 +656,11 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
       {/* ── Reset + Delete ── */}
       <TouchableOpacity
         onPress={handleClearFridge}
-        style={{ marginHorizontal: 16, marginBottom: 4, padding: 12, alignItems: 'center' }}>
-        <Text style={{ color: C.t3, fontSize: 13 }}>Repartir de zéro · effacer tous mes produits</Text>
+        style={{ marginHorizontal: 16, marginBottom: 4, paddingVertical: 12, paddingHorizontal: 20,
+          alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
+          backgroundColor: '#FFF8EE', borderRadius: 16 }}>
+        <Trash2 size={14} color="#F59E0B" strokeWidth={2.5} />
+        <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Repartir de zéro · effacer tous mes produits</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
