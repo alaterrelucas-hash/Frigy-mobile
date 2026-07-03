@@ -79,6 +79,7 @@ function App() {
   const [fridgeUrgent, setFridgeUrgent] = useState(false);
   const [fridgeInitialItem, setFridgeInitialItem] = useState(null);
   const [streak, setStreak] = useState(0);
+  const [notifPrefs, setNotifPrefs] = useState({});
 
   const { isPro, purchase, restore } = useSubscription();
 
@@ -119,7 +120,7 @@ function App() {
     await supabase.rpc('setup_user_profile');
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, family_id, name, streak, last_opened')
+      .select('id, family_id, name, streak, last_opened, notification_prefs')
       .eq('id', userId)
       .single();
     if (profile?.family_id) {
@@ -149,7 +150,9 @@ function App() {
         setProfileName(profile.name || '');
       }
       setFamilyId(profile.family_id);
+      if (profile.notification_prefs) setNotifPrefs(profile.notification_prefs);
       fetchItems(profile.family_id);
+      registerPushToken(userId);
       posthog.identify(userId, { name: finalName, family_id: profile.family_id });
     }
     } catch (e) {
@@ -180,44 +183,100 @@ function App() {
     }
   };
 
-  const scheduleExpiryNotifications = async (currentItems) => {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    const urgent = currentItems
-      .filter(i => i.days >= 0 && i.days <= 3)
-      .sort((a, b) => a.days - b.days)
-      .slice(0, 3);
-    if (!urgent.length) return;
-    const now = new Date();
-    for (const item of urgent) {
-      const trigger = new Date();
-      if (item.days === 0) {
-        trigger.setHours(18, 0, 0, 0);
-        if (trigger <= now) continue;
-      } else {
-        trigger.setDate(trigger.getDate() + item.days);
-        trigger.setHours(9, 0, 0, 0);
-      }
-      const when = item.days === 0 ? "aujourd'hui" : item.days === 1 ? 'demain' : `dans ${item.days} jours`;
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `${item.emoji} ${item.name}`,
-          body: `À consommer ${when} — ouvre Frigy pour une idée recette 👨‍🍳`,
-          sound: true,
-        },
-        trigger,
+  const registerPushToken = async (userId) => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+      const token = await Notifications.getExpoPushTokenAsync({
+        projectId: 'f8e07325-05c9-44c1-a029-4a21db4c3fb0',
       });
+      if (token?.data) {
+        await supabase.from('profiles').update({ push_token: token.data }).eq('id', userId);
+      }
+    } catch {}
+  };
+
+  const scheduleAllNotifications = async (currentItems, prefs = {}) => {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted' || prefs.pushEnabled === false) return;
+
+    const now = new Date();
+
+    // ── Alertes DLC ─────────────────────────────────────────────
+    if (prefs.expirationAlerts !== false) {
+      const urgent = currentItems
+        .filter(i => i.days >= 0 && i.days <= 3)
+        .sort((a, b) => a.days - b.days)
+        .slice(0, 5);
+
+      for (const item of urgent) {
+        if (prefs.dayBeforeReminder === false && item.days === 1) continue;
+        const trigger = new Date();
+        if (item.days === 0) {
+          trigger.setHours(18, 0, 0, 0);
+          if (trigger <= now) continue;
+        } else {
+          trigger.setDate(trigger.getDate() + item.days);
+          trigger.setHours(9, 0, 0, 0);
+        }
+        const when = item.days === 0 ? "aujourd'hui" : item.days === 1 ? 'demain' : `dans ${item.days} jours`;
+        const recipeHint = prefs.recipeSuggestions !== false ? ' Une recette t\'attend dans l\'app 👨‍🍳' : '';
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `${item.emoji} ${item.name} expire ${when}`,
+            body: `Ne le gaspille pas !${recipeHint}`,
+            sound: true,
+            data: { screen: 'recipes' },
+          },
+          trigger,
+        });
+      }
+    }
+
+    // ── Récap hebdomadaire (lundi 9h) ────────────────────────────
+    if (prefs.weeklySavingsSummary) {
+      const nextMonday = new Date();
+      const daysUntil = (8 - nextMonday.getDay()) % 7 || 7;
+      nextMonday.setDate(nextMonday.getDate() + daysUntil);
+      nextMonday.setHours(9, 0, 0, 0);
+      if (nextMonday > now) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '📊 Ton récap de la semaine',
+            body: 'Découvre tes économies et ce que tu as sauvé cette semaine !',
+            sound: true,
+            data: { screen: 'home' },
+          },
+          trigger: nextMonday,
+        });
+      }
+    }
+
+    // ── Impact CO₂ mensuel (1er du mois suivant 9h) ──────────────
+    if (prefs.monthlyCo2Impact) {
+      const nextFirst = new Date();
+      nextFirst.setDate(1);
+      nextFirst.setMonth(nextFirst.getMonth() + 1);
+      nextFirst.setHours(9, 0, 0, 0);
+      if (nextFirst > now) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🌍 Ton impact CO₂ du mois',
+            body: 'Vois combien de CO₂ tu as évité grâce à Frigy ce mois-ci !',
+            sound: true,
+            data: { screen: 'profile' },
+          },
+          trigger: nextFirst,
+        });
+      }
     }
   };
 
   useEffect(() => {
-    (async () => {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted' || !items.length || !user?.id) return;
-      const { data } = await supabase.from('profiles').select('notification_prefs').eq('id', user.id).single();
-      const prefs = data?.notification_prefs;
-      if (!prefs || prefs.pushEnabled !== false) scheduleExpiryNotifications(items);
-    })();
-  }, [items]);
+    if (!items.length || !user?.id) return;
+    scheduleAllNotifications(items, notifPrefs);
+  }, [items, notifPrefs]);
 
   const expiring = items.filter(i => i.days <= 4).sort((a, b) => a.days - b.days);
 
@@ -241,7 +300,7 @@ function App() {
           {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} streak={streak} />}
           {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
-          {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={async (prefs) => { if (!prefs.pushEnabled) { await Notifications.cancelAllScheduledNotificationsAsync(); } else if (items.length > 0) { scheduleExpiryNotifications(items); } }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }} />}
+          {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }} />}
 
           <View style={styles.tabBar}>
             {[
