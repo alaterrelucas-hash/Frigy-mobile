@@ -249,7 +249,7 @@ function NotificationsModal({ visible, onClose, user, onPrefsChange }) {
 
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onPrefsChange }) {
+export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onPrefsChange, onClearFridge }) {
   const [stats,            setStats]            = useState(null);
   const [localName,        setLocalName]        = useState(profileName || '');
   const [avatarUri,        setAvatarUri]        = useState(null);
@@ -406,6 +406,34 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
       { text: 'Annuler', style: 'cancel' },
       { text: 'Se déconnecter', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
+  };
+
+  const handleClearFridge = () => {
+    Alert.alert(
+      '🗑 Vider le frigo',
+      'Tous tes produits actuels seront supprimés. Ton historique et tes stats restent intacts.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Vider le frigo',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Tu es sûr ?',
+              'Cette action est irréversible — tous tes produits en cours seront effacés.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Oui, tout vider',
+                  style: 'destructive',
+                  onPress: onClearFridge,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteAccount = () => {
@@ -600,6 +628,22 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
             <ChevronRight size={16} color={C.t4} strokeWidth={2} />
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* ── Danger zone ── */}
+      <View style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: C.card, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
+        <TouchableOpacity
+          onPress={handleClearFridge}
+          style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14 }}>
+          <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center' }}>
+            <Trash2 size={20} color="#F59E0B" strokeWidth={1.8} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: C.t1 }}>Vider le frigo</Text>
+            <Text style={{ fontSize: 12, color: C.t3, marginTop: 1 }}>Remettre tous les produits à zéro</Text>
+          </View>
+          <ChevronRight size={16} color={C.t4} strokeWidth={2} />
+        </TouchableOpacity>
       </View>
 
       {/* ── Upgrade banner (only if free) ── */}
