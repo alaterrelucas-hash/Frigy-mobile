@@ -410,24 +410,20 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
 
   const handleClearFridge = () => {
     Alert.alert(
-      '🗑 Vider le frigo',
-      'Tous tes produits actuels seront supprimés. Ton historique et tes stats restent intacts.',
+      'Repartir de zéro',
+      'Tous tes produits (frigo, congélateur et placards) seront effacés. Ton historique et tes stats restent intacts.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Vider le frigo',
+          text: 'Tout effacer',
           style: 'destructive',
           onPress: () => {
             Alert.alert(
-              'Tu es sûr ?',
-              'Cette action est irréversible — tous tes produits en cours seront effacés.',
+              'Dernière confirmation',
+              'Cette action est irréversible.',
               [
                 { text: 'Annuler', style: 'cancel' },
-                {
-                  text: 'Oui, tout vider',
-                  style: 'destructive',
-                  onPress: onClearFridge,
-                },
+                { text: 'Oui, repartir de zéro', style: 'destructive', onPress: onClearFridge },
               ]
             );
           },
@@ -630,22 +626,6 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         ))}
       </View>
 
-      {/* ── Danger zone ── */}
-      <View style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: C.card, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
-        <TouchableOpacity
-          onPress={handleClearFridge}
-          style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14 }}>
-          <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center' }}>
-            <Trash2 size={20} color="#F59E0B" strokeWidth={1.8} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: C.t1 }}>Vider le frigo</Text>
-            <Text style={{ fontSize: 12, color: C.t3, marginTop: 1 }}>Remettre tous les produits à zéro</Text>
-          </View>
-          <ChevronRight size={16} color={C.t4} strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
-
       {/* ── Upgrade banner (only if free) ── */}
       {!isPro && (
         <TouchableOpacity
@@ -673,10 +653,16 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         <Text style={{ color: C.red, fontWeight: '700', fontSize: 15 }}>{SCREEN.logout}</Text>
       </TouchableOpacity>
 
-      {/* ── Delete account ── */}
+      {/* ── Reset + Delete ── */}
+      <TouchableOpacity
+        onPress={handleClearFridge}
+        style={{ marginHorizontal: 16, marginBottom: 4, padding: 12, alignItems: 'center' }}>
+        <Text style={{ color: C.t3, fontSize: 13 }}>Repartir de zéro · effacer tous mes produits</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         onPress={handleDeleteAccount}
-        style={{ marginHorizontal: 16, marginBottom: 16, padding: 14, alignItems: 'center' }}>
+        style={{ marginHorizontal: 16, marginBottom: 16, padding: 12, alignItems: 'center' }}>
         <Text style={{ color: C.t3, fontSize: 13 }}>Supprimer mon compte</Text>
       </TouchableOpacity>
 
