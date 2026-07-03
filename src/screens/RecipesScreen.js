@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RECIPES_FN_URL, SPOONACULAR_KEY } from '../config/urls';
 import { SUPABASE_KEY, supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
-import { C } from '../config/constants';
+import { C, CATEGORY_PRICE } from '../config/constants';
 import { getCachedImage, saveCachedImage } from '../api/recipeImages';
 
 async function spoonacularSearch(query) {
@@ -45,11 +45,30 @@ function splitIngredients(ingredients = [], expiringItems = []) {
   };
 }
 
+function calculateROI(ingredients = [], allItems = []) {
+  const matched = [];
+  const missing = [];
+  ingredients.forEach(ing => {
+    const ingLower = ing.toLowerCase();
+    const match = allItems.find(item => {
+      const n = item.name.toLowerCase();
+      return ingLower.includes(n) || n.split(' ').some(w => w.length > 3 && ingLower.includes(w));
+    });
+    if (match) matched.push({ ingredient: ing, item: match });
+    else missing.push(ing);
+  });
+  const value = matched.reduce((sum, m) => {
+    return sum + (m.item.price || CATEGORY_PRICE[m.item.category] || 2.5);
+  }, 0);
+  return { matched, missing, value };
+}
+
 /* ── RecipeModal ── */
 
-function RecipeModal({ recipe, onClose, expiringItems }) {
+function RecipeModal({ recipe, onClose, expiringItems, allItems }) {
   if (!recipe) return null;
   const { urgent, complementary } = splitIngredients(recipe.ingredients, expiringItems);
+  const { matched, missing, value } = calculateROI(recipe.ingredients || [], allItems || []);
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -95,6 +114,13 @@ function RecipeModal({ recipe, onClose, expiringItems }) {
               {recipe.saves && (
                 <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#FFFBEB', borderRadius: 100 }}>
                   <Text style={{ fontSize: 13, color: '#92661A', fontWeight: '700' }}>−{recipe.saves}€ économisés</Text>
+                </View>
+              )}
+              {value > 0 && (
+                <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#F0FBF0', borderRadius: 100, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 13, color: C.green, fontWeight: '700' }}>
+                    💰 {value.toFixed(2).replace('.', ',')}€ déjà dans ton frigo
+                  </Text>
                 </View>
               )}
             </View>
@@ -143,13 +169,48 @@ function RecipeModal({ recipe, onClose, expiringItems }) {
                 </>
               )}
 
-              {!urgent.length && !complementary.length && (recipe.ingredients || []).map((ing, i) => (
+              {!urgent.length && !complementary.length && matched.length === 0 && (recipe.ingredients || []).map((ing, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
                   paddingVertical: 10, borderBottomWidth: i < recipe.ingredients.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.green }} />
                   <Text style={{ fontSize: 14, color: C.t1, fontWeight: '500' }}>{ing}</Text>
                 </View>
               ))}
+
+              {/* ROI — ingrédients déjà dans le frigo */}
+              {matched.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: C.green, letterSpacing: 0.5, marginTop: 8, marginBottom: 8 }}>
+                    ✅ DÉJÀ DANS TON FRIGO
+                  </Text>
+                  {matched.map((m, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 8, borderBottomWidth: i < matched.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.green }} />
+                      <Text style={{ flex: 1, fontSize: 14, color: C.t1, fontWeight: '500' }}>{m.ingredient}</Text>
+                      <Text style={{ fontSize: 12, color: C.green, fontWeight: '700' }}>
+                        {(m.item.price || CATEGORY_PRICE[m.item.category] || 2.5).toFixed(2).replace('.', ',')}€
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Ingrédients manquants */}
+              {missing.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: C.t3, letterSpacing: 0.5, marginTop: 14, marginBottom: 8 }}>
+                    🛒 À ACHETER
+                  </Text>
+                  {missing.map((ing, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 8, borderBottomWidth: i < missing.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.t4 }} />
+                      <Text style={{ fontSize: 14, color: C.t2, fontWeight: '500' }}>{ing}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
             </View>
 
             {/* Étapes */}
@@ -292,7 +353,7 @@ export default function RecipesScreen({ items, user }) {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} showsVerticalScrollIndicator={false}>
-      <RecipeModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} expiringItems={expiring} />
+      <RecipeModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} expiringItems={expiring} allItems={items} />
 
       {/* ─── HEADER ─── */}
       <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
@@ -390,6 +451,7 @@ export default function RecipesScreen({ items, user }) {
         {/* ─── RECIPE CARDS ─── */}
         {!loading && filteredRecipes.map((r, i) => {
           const { urgent } = splitIngredients(r.ingredients, expiring);
+          const { matched: roiMatched, value: roiValue } = calculateROI(r.ingredients || [], items);
           const isFav = favorites.has(r.name);
 
           return (
@@ -434,8 +496,17 @@ export default function RecipesScreen({ items, user }) {
                   </View>
                 )}
 
-                {/* Badge économies */}
-                {r.saves && (
+                {/* Badge ROI frigo */}
+                {roiValue > 0 && (
+                  <View style={{ position: 'absolute', bottom: 12, left: 12,
+                    paddingHorizontal: 10, paddingVertical: 5,
+                    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 100 }}>
+                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>
+                      💰 {roiValue.toFixed(2).replace('.', ',')}€ dans ton frigo
+                    </Text>
+                  </View>
+                )}
+                {!roiValue && r.saves && (
                   <View style={{ position: 'absolute', bottom: 12, left: 12,
                     paddingHorizontal: 10, paddingVertical: 5,
                     backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 100 }}>
