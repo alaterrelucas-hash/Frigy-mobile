@@ -249,7 +249,7 @@ function NotificationsModal({ visible, onClose, user, onPrefsChange }) {
 
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onPrefsChange, onClearFridge }) {
+export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onPrefsChange, onClearFridge, onClearAll }) {
   const [stats,            setStats]            = useState(null);
   const [localName,        setLocalName]        = useState(profileName || '');
   const [avatarUri,        setAvatarUri]        = useState(null);
@@ -408,25 +408,34 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
     ]);
   };
 
+  const confirmClear = (withHistory) => {
+    const msg = withHistory
+      ? 'Tous tes produits ET tout ton historique (économies, CO₂, produits sauvés/gaspillés) seront définitivement effacés.'
+      : 'Tous tes produits actuels seront effacés. Ton historique et tes stats restent intacts.';
+    Alert.alert('Dernière confirmation', msg, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Confirmer',
+        style: 'destructive',
+        onPress: withHistory ? onClearAll : onClearFridge,
+      },
+    ]);
+  };
+
   const handleClearFridge = () => {
     Alert.alert(
       'Repartir de zéro',
-      'Tous tes produits (frigo, congélateur et placards) seront effacés. Ton historique et tes stats restent intacts.',
+      'Que veux-tu effacer ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Tout effacer',
+          text: 'Produits uniquement',
+          onPress: () => confirmClear(false),
+        },
+        {
+          text: 'Produits + historique',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Dernière confirmation',
-              'Cette action est irréversible.',
-              [
-                { text: 'Annuler', style: 'cancel' },
-                { text: 'Oui, repartir de zéro', style: 'destructive', onPress: onClearFridge },
-              ]
-            );
-          },
+          onPress: () => confirmClear(true),
         },
       ]
     );
