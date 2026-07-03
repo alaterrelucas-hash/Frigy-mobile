@@ -10,12 +10,13 @@ import * as Haptics from 'expo-haptics';
 import { C } from '../config/constants';
 
 export default function ShoppingListScreen({ onClose, familyId, user }) {
-  const [items, setItems]     = useState([]);
-  const [input, setInput]     = useState('');
-  const [loading, setLoading] = useState(true);
-  const [kbHeight, setKbHeight] = useState(0);
-  const inputRef              = useRef(null);
-  const insets                = useSafeAreaInsets();
+  const [items, setItems]         = useState([]);
+  const [input, setInput]         = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [kbHeight, setKbHeight]   = useState(0);
+  const [wastedInsights, setWastedInsights] = useState([]);
+  const inputRef                  = useRef(null);
+  const insets                    = useSafeAreaInsets();
 
   const fid = familyId || user?.id;
 
@@ -36,6 +37,30 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
         if (error) Alert.alert('Erreur chargement', error.message);
         if (data) setItems(data);
         setLoading(false);
+      });
+
+    // Analyse de l'historique de gaspillage (60 derniers jours)
+    const since = new Date();
+    since.setDate(since.getDate() - 60);
+    supabase
+      .from('items')
+      .select('name, emoji, category')
+      .eq('family_id', fid)
+      .eq('wasted', true)
+      .gte('updated_at', since.toISOString())
+      .then(({ data }) => {
+        if (!data?.length) return;
+        const counts = {};
+        data.forEach(i => {
+          const key = i.name.toLowerCase().trim();
+          if (!counts[key]) counts[key] = { name: i.name, emoji: i.emoji || '🛒', count: 0 };
+          counts[key].count++;
+        });
+        const insights = Object.values(counts)
+          .filter(i => i.count >= 2)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 4);
+        setWastedInsights(insights);
       });
   }, [fid]);
 
@@ -117,6 +142,41 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
           style={{ flex: 1, paddingHorizontal: 16 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
+
+          {/* ── Produits à surveiller ── */}
+          {wastedInsights.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B', letterSpacing: 0.8 }}>
+                  ⚠️ TU GASPILLES SOUVENT
+                </Text>
+              </View>
+              <View style={{ backgroundColor: '#FFFBEB', borderRadius: 18, padding: 14,
+                borderWidth: 1.5, borderColor: '#FDE68A' }}>
+                <Text style={{ fontSize: 12, color: '#92610A', marginBottom: 12, lineHeight: 17 }}>
+                  Ces produits reviennent souvent dans tes déchets. Pense à en acheter moins ou à les consommer plus vite.
+                </Text>
+                {wastedInsights.map((p, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center',
+                    paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#FDE68A', gap: 10 }}>
+                    <Text style={{ fontSize: 24, width: 32, textAlign: 'center' }}>{p.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#78350F' }}>{p.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#92610A', marginTop: 1 }}>
+                        Gaspillé {p.count} fois ces 2 derniers mois
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => { setInput(p.name); inputRef.current?.focus(); }}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6,
+                        backgroundColor: '#F59E0B', borderRadius: 10 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>+ Liste</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {items.length === 0 && !loading && (
             <View style={{ alignItems: 'center', paddingVertical: 64 }}>
