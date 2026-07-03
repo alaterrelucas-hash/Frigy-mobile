@@ -173,13 +173,14 @@ function App() {
   };
 
   const enrichItemImages = async (allItems) => {
-    const missing = allItems.filter(i => !i.img_url).slice(0, 20);
+    const missing = allItems.filter(i => !i.img_url).slice(0, 5);
     for (const item of missing) {
       const imgUrl = await searchImageByName(`${item.name} ${item.brand || ''}`.trim());
       if (imgUrl) {
         await supabase.from('items').update({ img_url: imgUrl }).eq('id', item.id);
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, img_url: imgUrl } : i));
       }
+      await new Promise(r => setTimeout(r, 300));
     }
   };
 

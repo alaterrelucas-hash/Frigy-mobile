@@ -1,8 +1,11 @@
 export async function searchImageByName(name) {
   try {
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&json=1&page_size=3&fields=image_front_display_url,image_front_url,image_url`;
-    const r = await fetch(url);
-    const d = await r.json();
+    const headers = { 'User-Agent': 'Frigy/1.1 (lucas@greenowl.fr)' };
+    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(name)}&fields=image_front_display_url,image_front_url,image_url&page_size=3`;
+    const r = await fetch(url, { headers });
+    const text = await r.text();
+    if (!text.startsWith('{')) return null; // HTML = rate-limited, skip
+    const d = JSON.parse(text);
     const products = d.products || [];
     for (const p of products) {
       const img = p.image_front_display_url || p.image_front_url || p.image_url;
