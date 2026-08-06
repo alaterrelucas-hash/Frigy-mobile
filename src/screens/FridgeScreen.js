@@ -1,32 +1,33 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
-  Search, ScanLine,
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Refrigerator, Snowflake, Package,
+  Search,
+  ChevronLeft,
+  Package,
   CalendarDays, AlertTriangle,
-  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, ShoppingCart, PackageOpen,
+  Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, PackageOpen, Plus,
 } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
-import { C, urgBg, urgLbl, LOC_ITEMS, SCREEN_W } from '../config/constants';
+import { C, urgBg, urgLbl, LOC_ITEMS } from '../config/constants';
 import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays, estimateDays } from '../utils/product';
+import { computeDaysRemaining, getTemporalTier, TEMPORAL_TIER } from '../utils/temporal';
+import { useStockTheme } from '../utils/stockTheme';
+import { DEV_PREVIEW_STOCK_ENABLED, getDevPreviewItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
 import { styles } from '../styles';
+import StorageScopeControl from '../components/StorageScopeControl';
+import InventoryProductRow from '../components/InventoryProductRow';
+import InventoryHeader from '../components/InventoryHeader';
 
-const BG    = '#F7F9F8';
-const BLUE  = '#4F7DF3';
-const AMBER = '#E6A23C';
-const GREY  = '#6B7280';
-const BORD  = '#E5E7EB';
-
-const STORAGE_TABS = [
-  { id: 'Frigo',       label: 'Frigo',        Icon: Refrigerator, color: C.green, bg: '#fff',     secBg: '#F0FBF0' },
-  { id: 'Congélateur', label: 'Congélateur',   Icon: Snowflake,    color: BLUE,    bg: '#EFF3FE',  secBg: '#EFF3FE' },
-  { id: 'Placard',     label: 'Placard',       Icon: Package,      color: AMBER,   bg: '#FEF6E7',  secBg: '#FEF6E7' },
-];
+const BG = '#F7F9F8';
 
 const FILTERS = ['Tous', 'À consommer', 'DLC proche'];
+
+// Masqué le temps de la revue visuelle pour éviter le doublon avec le "+" global
+// de la navigation (App.js). Décision finale à prendre avec le Master Navigation —
+// remettre à true (ou retirer la condition) une fois cette dette résolue.
+const SHOW_STOCK_FAB = false;
 
 const NUTRI_COLORS = { A: '#2ECC71', B: '#8BC34A', C: '#F5B700', D: '#E6A23C', E: '#FF3B30' };
 
@@ -68,21 +69,36 @@ function NutritionBadge({ grade }) {
 
 export default function FridgeScreen({
   items, setItems, user, urgentMode, onExitUrgent,
-  initialItem, onInitialItemConsumed, onScan, onShopping,
+  initialItem, onInitialItemConsumed, onScan, onShopping, stockFontsLoaded,
 }) {
   const [q, setQ]                         = useState('');
   const [activeFilter, setActiveFilter]   = useState('Tous');
-  const [expanded, setExpanded]           = useState(new Set(['Frigo']));
-  const [showMore, setShowMore]           = useState({});
   const [selectedItem, setSelectedItem]   = useState(null);
   const [editMode, setEditMode]           = useState(false);
   const [editFields, setEditFields]       = useState({});
   const [detailImgError, setDetailImgError] = useState(false);
   const [localItems, setLocalItems]       = useState(items);
-  const locScrollRef = useRef(null);
-  const [restLoc, setRestLoc]             = useState(0);
+  const [activeScope, setActiveScope]     = useState('Frigo');
+  const theme = useStockTheme();
 
-  useEffect(() => { setLocalItems(items); }, [items]);
+  // Typography System Frigy — Source Sans 3 (chargée dans App.js). Tant que le
+  // chargement n'est pas terminé, fontFamily reste undefined et le fontWeight
+  // (conservé sur chaque style) pilote le rendu via la police système en repli.
+  const fonts = {
+    regular: stockFontsLoaded ? 'SourceSans3-Regular' : undefined,
+    semibold: stockFontsLoaded ? 'SourceSans3-SemiBold' : undefined,
+  };
+
+  // DEV-ONLY : remplace temporairement l'affichage par un jeu de démonstration
+  // calibré sur la composition du Master (2/3/2), pour comparer sans le biais
+  // du volume réel de données. Remplacement, pas ajout — le compte réel et
+  // Supabase ne sont jamais touchés (setItems/updateItems continuent de
+  // pointer sur `items`, seul l'affichage local change).
+  // Jamais actif en production (__DEV__ est toujours false en build release).
+  useEffect(() => {
+    const useDevPreview = __DEV__ && DEV_PREVIEW_STOCK_ENABLED;
+    setLocalItems(useDevPreview ? getDevPreviewItems() : items);
+  }, [items]);
 
   const updateItems = (updater) => { setItems(updater); setLocalItems(updater); };
 
@@ -96,13 +112,10 @@ export default function FridgeScreen({
   const applyFilter = (list) => {
     let out = list;
     if (q) out = out.filter(i => i.name.toLowerCase().includes(q.toLowerCase()));
-    if (activeFilter === 'À consommer') out = out.filter(i => (i.days ?? 99) <= 4);
-    if (activeFilter === 'DLC proche')  out = out.filter(i => (i.days ?? 99) <= 7);
+    if (activeFilter === 'À consommer') out = out.filter(i => (computeDaysRemaining(i) ?? 99) <= 4);
+    if (activeFilter === 'DLC proche')  out = out.filter(i => (computeDaysRemaining(i) ?? 99) <= 7);
     return out;
   };
-
-  const toggleSection = (id) =>
-    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   /* ── CRUD ── */
   const openEdit = (item) => {
@@ -178,59 +191,6 @@ export default function FridgeScreen({
     updateItems(p => p.map(x => x.id === item.id ? { ...x, ...updates, days: newDays } : x));
     setSelectedItem(prev => ({ ...prev, ...updates, days: newDays }));
     await supabase.from('items').update(updates).eq('id', item.id);
-  };
-
-  /* ── ProductCard ── */
-  const ProductCard = ({ item, isLast }) => {
-    const [imgErr, setImgErr] = useState(false);
-    const isPack = (item.total_units || 1) > 1;
-    return (
-      <TouchableOpacity onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
-        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16,
-          borderBottomWidth: isLast ? 0 : 1, borderBottomColor: '#F3F4F6' }}>
-        {/* image */}
-        <View style={{ width: 68, height: 68, borderRadius: 14, backgroundColor: '#F4F6F4',
-          alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-          {item.img_url && !imgErr
-            ? <Image source={{ uri: item.img_url }} style={{ width: 62, height: 62, borderRadius: 11 }}
-                resizeMode="cover" onError={() => setImgErr(true)} />
-            : <Text style={{ fontSize: 34 }}>{item.emoji || '🛒'}</Text>}
-        </View>
-        {/* info */}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: C.t1, marginBottom: 2 }} numberOfLines={1}>{item.name}</Text>
-          <Text style={{ fontSize: 12, color: GREY }} numberOfLines={1}>
-            {[item.brand, item.category, item.location].filter(Boolean).join(' · ')}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-            <CalendarDays size={11} color={GREY} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: GREY }}>DLC {item.dlc && item.dlc !== '—' ? item.dlc : 'Non renseignée'}</Text>
-          </View>
-          {isPack && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <View style={{ paddingHorizontal: 8, paddingVertical: 2, backgroundColor: `${C.green}15`, borderRadius: 6 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: C.green }}>{item.quantity}/{item.total_units}</Text>
-              </View>
-              <TouchableOpacity onPress={() => decrementUnit(item)}
-                style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: `${C.orange}20`,
-                  alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: C.orange, lineHeight: 18 }}>−</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <FreshnessBar days={item.days} />
-        </View>
-        {/* right badges */}
-        <View style={{ alignItems: 'center', gap: 4, marginLeft: 10 }}>
-          <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
-            backgroundColor: urgBg(item.days ?? 14) }}>
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{urgLbl(item.days ?? 14)}</Text>
-          </View>
-          <NutritionBadge grade={item.nutri_grade} />
-          <ChevronRight size={14} color={C.t4} />
-        </View>
-      </TouchableOpacity>
-    );
   };
 
   /* ── Detail modal (inline call to avoid remount) ── */
@@ -480,158 +440,126 @@ export default function FridgeScreen({
     </View>
   );
 
-  /* ── Main view ── */
+  /* ── Main view — Mon Stock Master v1.0 ── */
+  const scopedItems   = localItems.filter(i => i.location === activeScope);
+  const filteredScoped = applyFilter(scopedItems);
+
+  const priorityItems = filteredScoped
+    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.PRIORITY)
+    .sort((a, b) => computeDaysRemaining(a) - computeDaysRemaining(b));
+  const soonItems = filteredScoped
+    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.SOON)
+    .sort((a, b) => computeDaysRemaining(a) - computeDaysRemaining(b));
+  const laterItems = filteredScoped
+    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.LATER)
+    .sort((a, b) => {
+      const da = computeDaysRemaining(a), db = computeDaysRemaining(b);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da - db;
+    });
+
+  // Natural Focus : porte le bon moment (un produit "aujourd'hui"), jamais l'état
+  // le plus problématique. Un produit "Date dépassée — vérifier" (days < 0) n'est
+  // jamais candidat — le rouge porte déjà la vérification, la lumière n'en rajoute
+  // pas. Un seul candidat maximum ; aucun candidat pertinent → aucun focus.
+  const focusedItemId = priorityItems.find(i => computeDaysRemaining(i) === 0)?.id ?? null;
+
+  // Couleurs de libellé alignées sur le Master : identité fixe par section
+  // (statique, jamais conditionnelle au contenu) — le rouge de "priorité" est
+  // la teinte propre à la section, pas un signal déclenché par un item dépassé.
+  const sections = [
+    { key: TEMPORAL_TIER.PRIORITY, label: 'À utiliser en priorité', items: priorityItems, labelColor: theme.critical },
+    { key: TEMPORAL_TIER.SOON,     label: 'À utiliser prochainement', items: soonItems,    labelColor: theme.attention },
+    { key: TEMPORAL_TIER.LATER,    label: 'Plus tard',               items: laterItems,    labelColor: theme.text1 },
+  ];
+
+  const scopeLabel = activeScope === 'Frigo' ? 'le frigo' : activeScope === 'Congélateur' ? 'le congélateur' : 'le placard';
+
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
       {DetailModal()}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        <InventoryHeader
+          theme={theme}
+          fonts={fonts}
+          query={q}
+          onQueryChange={setQ}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          filters={FILTERS}
+        />
 
-        {/* ─── HEADER ─── */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-          paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
-          <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>Mon Stock</Text>
-          <TouchableOpacity onPress={onShopping}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.card,
-              alignItems: 'center', justifyContent: 'center',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 }}>
-            <ShoppingCart size={18} color={C.t2} strokeWidth={2} />
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: 16, marginTop: 10, marginBottom: 18 }}>
+          <StorageScopeControl active={activeScope} onChange={setActiveScope} theme={theme} fonts={fonts} />
         </View>
 
-        {/* ─── STORAGE TABS ─── */}
-        <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 20 }}>
-          {STORAGE_TABS.map(tab => {
-            const cnt = localItems.filter(i => i.location === tab.id).length;
-            const isActive = expanded.has(tab.id);
-            return (
-              <TouchableOpacity key={tab.id} onPress={() => toggleSection(tab.id)}
-                style={{ flex: 1, alignItems: 'center', paddingVertical: 18, borderRadius: 20,
-                  backgroundColor: tab.bg,
-                  borderWidth: isActive ? 2 : 1,
-                  borderColor: isActive ? tab.color : BORD,
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 }}>
-                <tab.Icon size={26} color={tab.color} strokeWidth={isActive ? 2.5 : 1.8} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: tab.color, marginBottom: 3 }}>{tab.label}</Text>
-                <Text style={{ fontSize: 20, fontWeight: '900', color: tab.color }}>{cnt}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ─── EMPTY STATE ─── */}
-        {localItems.length === 0 && (
-          <View style={{ alignItems: 'center', paddingTop: 32, paddingHorizontal: 32, paddingBottom: 40 }}>
-            <Image
-              source={require('../../assets/fridge.png')}
-              style={{ width: 130, height: 130, marginBottom: 24 }}
-              resizeMode="contain"
-            />
-            <Text style={{ fontSize: 22, fontWeight: '900', color: C.t1, letterSpacing: -0.8, marginBottom: 10, textAlign: 'center' }}>
-              Ton frigo est vide
+        {scopedItems.length === 0 ? (
+          /* ─── ÉTAT VIDE : espace calme, action simple ─── */
+          <View style={{ alignItems: 'center', paddingTop: 36, paddingHorizontal: 32, paddingBottom: 40 }}>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: theme.text2, marginBottom: 6, textAlign: 'center' }}>
+              Rien dans {scopeLabel}
             </Text>
-            <Text style={{ fontSize: 15, color: C.t3, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
-              Scanne tes produits pour suivre tes DLC et ne plus rien gaspiller.
+            <Text style={{ fontFamily: fonts.regular, fontSize: 13.5, fontWeight: '400', color: theme.text3, textAlign: 'center', lineHeight: 20, marginBottom: 22 }}>
+              Ajoute un produit pour commencer à suivre ce qui s'y trouve.
             </Text>
             <TouchableOpacity onPress={onScan}
-              style={{ backgroundColor: C.green, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 36,
-                shadowColor: C.green, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Scanner un produit</Text>
+              style={{ backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 26 }}>
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: '#fff' }}>Ajouter un produit</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16 }}>
+            {sections.map(section => section.items.length === 0 ? null : (
+              // Pas de fond, pas de radius, pas d'ombre : le fond de l'écran traverse
+              // la liste. La hiérarchie vient du titre, de l'espace et des séparateurs.
+              // Libellé recalibré sur le Master : traitement Overline compact
+              // (UPPERCASE, tracking léger) — le Master prime sur l'échelle Title 2
+              // de la Spec quand l'application littérale de celle-ci régresse le rendu.
+              <View key={section.key} style={{ marginBottom: 18 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 11, fontWeight: '600', letterSpacing: 0.4, color: section.labelColor }}>
+                    {section.label.toUpperCase()}
+                  </Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 12, fontWeight: '400', color: theme.text4 }}>{section.items.length}</Text>
+                </View>
+                {section.items.map((item, idx) => (
+                  <InventoryProductRow
+                    key={item.id}
+                    item={item}
+                    theme={theme}
+                    fonts={fonts}
+                    tier={section.key}
+                    isFocused={item.id === focusedItemId}
+                    isLast={idx === section.items.length - 1}
+                    onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
         )}
-
-        {/* ─── SEARCH + SECTIONS ─── */}
-        {localItems.length > 0 && (<>
-        <View style={{ marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center',
-          backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, height: 54,
-          shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6,
-          borderWidth: 1, borderColor: BORD }}>
-          <Search size={18} color="#9CA3AF" strokeWidth={2} style={{ marginRight: 10 }} />
-          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher un produit…"
-            placeholderTextColor="#9CA3AF"
-            style={{ flex: 1, fontSize: 15, color: C.t1 }} />
-          <TouchableOpacity onPress={onScan}>
-            <ScanLine size={20} color="#9CA3AF" strokeWidth={1.8} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ─── FILTER PILLS ─── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 2 }}
-          style={{ marginBottom: 20 }}>
-          {FILTERS.map(f => {
-            const isActive = activeFilter === f;
-            return (
-              <TouchableOpacity key={f} onPress={() => setActiveFilter(f)}
-                style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999,
-                  backgroundColor: isActive ? C.green : '#fff',
-                  borderWidth: 1, borderColor: isActive ? C.green : BORD }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: isActive ? '#fff' : C.t1 }}>{f}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* ─── COLLAPSIBLE SECTIONS ─── */}
-        {STORAGE_TABS.map(tab => {
-          const sectionItems = applyFilter(items.filter(i => i.location === tab.id));
-          const isExpanded   = expanded.has(tab.id);
-          const isShowMore   = showMore[tab.id];
-          const visible      = isShowMore ? sectionItems : sectionItems.slice(0, 5);
-
-          return (
-            <View key={tab.id} style={{ marginHorizontal: 16, marginBottom: 12, borderRadius: 20, overflow: 'hidden',
-              backgroundColor: '#fff',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 }}>
-
-              {/* section header */}
-              <TouchableOpacity onPress={() => toggleSection(tab.id)}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16,
-                  backgroundColor: tab.secBg }}>
-                <tab.Icon size={17} color={tab.color} strokeWidth={2} style={{ marginRight: 8 }} />
-                <Text style={{ flex: 1, fontSize: 13, fontWeight: '800', color: tab.color, letterSpacing: 0.5 }}>
-                  {tab.id.toUpperCase()} ({localItems.filter(i => i.location === tab.id).length})
-                </Text>
-                {isExpanded
-                  ? <ChevronUp size={18} color={GREY} strokeWidth={2} />
-                  : <ChevronDown size={18} color={GREY} strokeWidth={2} />}
-              </TouchableOpacity>
-
-              {isExpanded && (
-                <>
-                  {sectionItems.length === 0 ? (
-                    <View style={{ padding: 28, alignItems: 'center' }}>
-                      <tab.Icon size={32} color={tab.color + '50'} strokeWidth={1.5} style={{ marginBottom: 8 }} />
-                      <Text style={{ fontSize: 13, color: GREY }}>Rien dans ce {tab.label.toLowerCase()}</Text>
-                    </View>
-                  ) : (
-                    visible.map((item, i) => (
-                      <ProductCard key={item.id} item={item}
-                        isLast={i === visible.length - 1 && (sectionItems.length <= 5 || isShowMore)} />
-                    ))
-                  )}
-
-                  {sectionItems.length > 5 && (
-                    <TouchableOpacity onPress={() => setShowMore(p => ({ ...p, [tab.id]: !p[tab.id] }))}
-                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                        gap: 4, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                      <Text style={{ fontSize: 14, color: GREY, fontWeight: '600' }}>
-                        {isShowMore ? 'Voir moins' : 'Voir plus'}
-                      </Text>
-                      {isShowMore
-                        ? <ChevronUp size={14} color={GREY} strokeWidth={2} />
-                        : <ChevronDown size={14} color={GREY} strokeWidth={2} />}
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
-            </View>
-          );
-        })}
-        </>)}
-
       </ScrollView>
+
+      {/* ─── AJOUT — réutilise le flux Scan/Ajout existant, aucune nouvelle logique ───
+          DETTE D'INTÉGRATION (non résolue ici, hors scope de cette passe) : ce FAB
+          coexiste avec le bouton "+" central de la navigation globale (App.js). Les
+          deux ouvrent le même flux Scan, mais leur cohabitation visuelle devra être
+          tranchée avec le Master Navigation, pas dans cette calibration du Stock.
+          En attendant cette décision, masqué pour la revue visuelle (SHOW_STOCK_FAB)
+          afin d'éviter le doublon avec le "+" global — aucune navigation modifiée. */}
+      {SHOW_STOCK_FAB && scopedItems.length > 0 && (
+        <TouchableOpacity onPress={onScan}
+          style={{
+            position: 'absolute', bottom: 20, right: 20,
+            width: 52, height: 52, borderRadius: 26, backgroundColor: theme.accent,
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10,
+          }}>
+          <Plus size={24} color="#fff" strokeWidth={2.5} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

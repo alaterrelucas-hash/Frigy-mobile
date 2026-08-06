@@ -4,6 +4,7 @@ import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { useState, useEffect, Component } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { useFonts } from 'expo-font';
 import { Home, Refrigerator, Apple, User, Plus } from 'lucide-react-native';
 
 import { supabase } from './src/config/supabase';
@@ -82,6 +83,14 @@ function App() {
   const [notifPrefs, setNotifPrefs] = useState({});
 
   const { isPro, purchase, restore } = useSubscription();
+
+  // Chargement runtime (OTA-compatible, aucun plugin natif) — App.js charge
+  // uniquement la ressource. Seul Mon Stock reçoit fontFamily dans cette passe ;
+  // les autres écrans continuent d'utiliser la police système sans changement.
+  const [stockFontsLoaded] = useFonts({
+    'SourceSans3-Regular': require('./assets/fonts/SourceSans3-Regular.ttf'),
+    'SourceSans3-SemiBold': require('./assets/fonts/SourceSans3-SemiBold.ttf'),
+  });
 
   useEffect(() => {
     try {
@@ -299,7 +308,7 @@ function App() {
       ) : (
         <SafeAreaView style={styles.safe}>
           {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} streak={streak} />}
-          {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} />}
+          {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} stockFontsLoaded={stockFontsLoaded} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
           {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }}
                   onClearAll={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId); setItems([]); }} />}
