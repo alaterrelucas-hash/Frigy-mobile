@@ -7,7 +7,7 @@ import { formatQuantityLabel } from '../utils/quantity';
 // Ligne continue — pas de card individuelle, pas de FreshnessBar, pas de badge J-x,
 // pas de Nutri-Score, pas de brand/category. Ordre de lecture : aliment → nom →
 // quantité/état → temporalité → action.
-export default function InventoryProductRow({ item, theme, fonts, tier, isFocused, isLast, onPress }) {
+export default function InventoryProductRow({ item, theme, fonts, tier, focusIntensity = 0, isLast, onPress }) {
   const days = computeDaysRemaining(item);
   const descriptor = getTemporalDescriptor(days);
   const colorKey = getTemporalColorKey(days);
@@ -40,14 +40,40 @@ export default function InventoryProductRow({ item, theme, fonts, tier, isFocuse
   const foodWidth = imageSize * compactScale;
   const scaledFoodHeight = foodHeight * compactScale;
 
+  // Natural Focus — Focus de contact (D7.2) : NAPPE horizontale douce, pas un disque.
+  // La ligne est courte (~8 px seulement jusqu'aux séparateurs) : un halo rond assez
+  // grand pour être visible les toucherait. On l'aplatit donc fortement (ellipse
+  // scaleX 1.20 / scaleY 0.65) → large derrière le produit, bas → dégagé des traits de
+  // séparation (~8 px), near-zéro dans les marges (pas de blob à gauche). Pic ≤ 40 % (DS).
+  const glowSize = haloSize + 24;
+  const glowOffset = (haloSize - glowSize) / 2;
+  // Trois teintes lumineuses sémantiques, choisies par STATUT (jamais par aliment) :
+  //   overdue (colorKey critical) → famille Critical (présence dédiée à l'item dépassé) ;
+  //   Aujourd'hui / priorité      → chaud Priority ;
+  //   proche                      → chaud Upcoming, plus silencieux.
+  const glowColor = colorKey === 'critical'
+    ? theme.focusGlowCritical
+    : isPriority ? theme.focusGlowPriority : theme.focusGlowUpcoming;
+  // Gradation dans la fenêtre proche : présence décroissante par l'OPACITÉ (mécanisme
+  // contraste/opacity du système, aucune couleur de plus). Demain plein → J+4 plus faible.
+  const attentionFade = colorKey === 'attention' ? (days <= 1 ? 1 : days <= 3 ? 0.85 : 0.72) : 1;
+  // « Plus tard » : Tertiary Text — plus lisible que Disabled (#A1A5AA paraissait
+  // désactivé), tout en restant nettement secondaire vs attention/critical.
+  const descriptorColor = colorKey === 'neutral' ? theme.text3 : dotColor;
+
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.6}
+      // La priorité/temporalité est portée par le TEXTE (descriptor), jamais par la
+      // seule couleur : VoiceOver lit une phrase complète, pas des fragments + « · ».
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={[item.name, qtyLabel, descriptor, item.opened ? 'ouvert' : null].filter(Boolean).join(', ')}
       style={{
         flexDirection: 'row', alignItems: 'center',
-        paddingVertical: 7, paddingHorizontal: 12,
-        borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.separator,
+        paddingVertical: 8, paddingHorizontal: 12,
+        borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.separatorSubtle,
       }}>
       {/* L'aliment est le personnage principal : la vignette garde sa taille,
           mais l'enveloppe autour d'elle se resserre — l'interface s'efface.
@@ -57,22 +83,29 @@ export default function InventoryProductRow({ item, theme, fonts, tier, isFocuse
           (halo resserré au plus près), jamais un rectangle qui l'entoure. */}
       <View style={{
         width: haloSize, height: haloSize,
-        alignItems: 'center', justifyContent: 'flex-end', marginRight: isPriority ? 12 : 10,
+        alignItems: 'center', justifyContent: 'flex-end', marginRight: 12,
       }}>
-        {isFocused && (
-          // Lumière diffuse, pas une forme : dégradé radial très doux qui s'éteint
-          // avant d'atteindre un bord — jamais un disque identifiable. Ne change
-          // pas la taille de la zone alimentaire, purement décoratif en arrière-plan.
+        {focusIntensity > 0 && (
+          // Dégradé radial doux, jamais une forme : plateau au centre, épaule large sur
+          // la zone visible autour de l'aliment, puis longue queue de feathering qui se
+          // fond dans le canvas bien avant 100 % (dès ~88 % la lumière est quasi morte →
+          // pas de contour identifiable). Aplati en NAPPE horizontale (scaleX 1.20 /
+          // scaleY 0.65) via transform de vue : présence large derrière le produit tout
+          // en dégageant les traits de séparation. Générique (aucune règle par aliment).
           <Svg
-            width={haloSize} height={haloSize}
-            style={{ position: 'absolute', top: 0, left: 0 }}
+            width={glowSize} height={glowSize}
+            style={{ position: 'absolute', top: glowOffset, left: glowOffset, transform: [{ scaleX: 1.20 }, { scaleY: 0.65 }] }}
             pointerEvents="none">
             <Defs>
               <RadialGradient id={`focus-${item.id}`} cx="50%" cy="55%" r="55%">
-                <Stop offset="0%" stopColor={theme.focusGlow} stopOpacity={0.4} />
-                <Stop offset="40%" stopColor={theme.focusGlow} stopOpacity={0.22} />
-                <Stop offset="70%" stopColor={theme.focusGlow} stopOpacity={0.1} />
-                <Stop offset="100%" stopColor={theme.focusGlow} stopOpacity={0} />
+                <Stop offset="0%" stopColor={glowColor} stopOpacity={focusIntensity} />
+                <Stop offset="40%" stopColor={glowColor} stopOpacity={focusIntensity * 0.85} />
+                <Stop offset="60%" stopColor={glowColor} stopOpacity={focusIntensity * 0.63} />
+                <Stop offset="76%" stopColor={glowColor} stopOpacity={focusIntensity * 0.37} />
+                <Stop offset="88%" stopColor={glowColor} stopOpacity={focusIntensity * 0.13} />
+                <Stop offset="94%" stopColor={glowColor} stopOpacity={focusIntensity * 0.03} />
+                <Stop offset="98%" stopColor={glowColor} stopOpacity={focusIntensity * 0.006} />
+                <Stop offset="100%" stopColor={glowColor} stopOpacity={0} />
               </RadialGradient>
             </Defs>
             <Circle cx="50%" cy="50%" r="50%" fill={`url(#focus-${item.id})`} />
@@ -108,7 +141,8 @@ export default function InventoryProductRow({ item, theme, fonts, tier, isFocuse
           <Text
             style={{
               fontFamily: descriptorEmphasis ? fonts.semibold : fonts.regular,
-              fontSize: 13, fontWeight: descriptorEmphasis ? '600' : '400', color: dotColor,
+              fontSize: 13, fontWeight: descriptorEmphasis ? '600' : '400',
+              color: descriptorColor, opacity: attentionFade,
             }}
             numberOfLines={1}>
             {descriptor}
@@ -117,16 +151,16 @@ export default function InventoryProductRow({ item, theme, fonts, tier, isFocuse
         </View>
       </View>
 
-      {/* Ancrage visuel à droite, aligné sur le Master : reprend la même donnée
-          honnête que le sous-titre (aucune valeur inventée), juste isolée pour
-          une lecture rapide en un coup d'œil. Échelle recalibrée sur le Master
-          (14pt, Spec donnait 16pt), sans troncature. */}
+      {/* Ancrage visuel à droite : reprend la donnée honnête du sous-titre, isolée
+          pour un scan rapide. Text System — rôle Secondary (text2) : le NOM reste la
+          seule information Primary, l'ancre quantité ne rivalise plus avec lui sur une
+          longue liste (répétition de « 1 unité » atténuée). */}
       {qtyLabel && (
-        <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.text1, marginRight: 10 }}>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text2, marginRight: 10 }}>
           {qtyLabel}
         </Text>
       )}
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor, marginRight: 9 }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor, opacity: attentionFade, marginRight: 9 }} />
       <ChevronRight size={13} color={theme.text4} strokeWidth={2} />
     </TouchableOpacity>
   );

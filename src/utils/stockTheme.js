@@ -28,6 +28,7 @@ const LIGHT = {
   text3: '#75797A',         // Tertiary Text
   text4: '#A1A5AA',         // Disabled Text
   separator: '#E5E3DD',     // Border / Divider
+  separatorSubtle: '#ECE8E2', // Subtle Divider (CS01 §01) — divider de liste, plus discret
   // CONTRADICTION DOCUMENTÉE : la Spec donne Critical #C02828 / Notice #B16800,
   // mais appliquées telles quelles elles rendent plus ternes/brunes que le rouge
   // et l'orange vifs du Master (comparaison directe du 05/08, capture 18:00 vs
@@ -38,9 +39,12 @@ const LIGHT = {
   neutral: '#A1A5AA',       // Disabled Text (réutilisé — pas de statut "neutre" dédié dans la Spec)
   accent: '#166B4D',        // Brand/Action — Default
   accentSoft: '#E6F0EB',    // Brand/Action — Subtle
-  // Natural Focus — Focus Light (D7.2, contact). Couleur de base (sans alpha) :
-  // l'intensité/le dégradé sont gérés par le rendu (RadialGradient), pas ici.
-  focusGlow: '#FFF2D6',
+  // Natural Focus — Focus Light (D7.2, contact). Deux niveaux lumineux de la même
+  // famille chaude (l'intensité/le dégradé sont gérés au rendu, pas ici) :
+  focusGlowPriority: '#FFD39A', // Priority (Aujourd'hui) — clairement perceptible
+  focusGlowUpcoming: '#FFE6C2', // Upcoming (proche) — secondaire, plus silencieux
+  focusGlowCritical: '#FF4B4B', // Overdue — famille Critical (= token critical) : présence
+                                // dédiée à l'item dépassé, distincte du halo chaud (décision produit)
   scopeContainerBg: '#F6F6F3', // Elevated Surface
   scopeActiveBg: '#FFFFFF',    // Surface
   scopeActiveText: '#111317',  // Primary Text
@@ -57,12 +61,17 @@ const DARK = {
   text3: '#9EA2A6',          // Tertiary Text (Dark)
   text4: '#6B6F73',          // Disabled Text (Dark)
   separator: '#2A2C2F',      // Border / Divider (Dark)
+  separatorSubtle: '#34363A', // Subtle Divider (Dark) (CS01 §01)
   critical: '#FF6259',       // GAP — pas de valeur Dark normative fournie, conservé
   attention: '#FFA53D',      // GAP — pas de valeur Dark normative fournie, conservé
   neutral: '#6B6F73',        // Disabled Text (Dark)
   accent: '#166B4D',         // Brand/Action — identique aux deux thèmes (voir note)
   accentSoft: `${C.green}22`, // GAP — pas de variante "Subtle" Dark normative fournie, conservé
-  focusGlow: '#FFF2D6',      // Focus Light — même teinte lumière que Light, intensité gérée au rendu
+  // Dark : mêmes teintes que Light pour cette passe (validation Dark device ensuite,
+  // aucun facteur d'intensité Dark créé ici — décision documentée).
+  focusGlowPriority: '#FFD39A',
+  focusGlowUpcoming: '#FFE6C2',
+  focusGlowCritical: '#FF6259', // Overdue — famille Critical (Dark)
   scopeContainerBg: 'rgba(255,255,255,0.06)', // GAP — pas de valeur Dark normative fournie, conservé
   scopeActiveBg: '#166B4D',  // Brand/Action — identique aux deux thèmes
   scopeActiveText: '#FFFFFF', // On Action (Text) — Spec

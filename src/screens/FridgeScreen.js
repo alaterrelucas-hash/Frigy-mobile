@@ -14,7 +14,8 @@ import { C, urgBg, urgLbl, LOC_ITEMS } from '../config/constants';
 import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays, estimateDays } from '../utils/product';
 import { computeDaysRemaining, getTemporalTier, TEMPORAL_TIER } from '../utils/temporal';
 import { useStockTheme } from '../utils/stockTheme';
-import { DEV_PREVIEW_STOCK_ENABLED, getDevPreviewItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
+import { DEV_PREVIEW_STOCK_ENABLED, DEV_PREVIEW_MODE, getDevPreviewItems, getVisualQAItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
+import { resolveFoodImage } from '../utils/foodLanguage';
 import { styles } from '../styles';
 import StorageScopeControl from '../components/StorageScopeControl';
 import InventoryProductRow from '../components/InventoryProductRow';
@@ -30,6 +31,34 @@ const FILTERS = ['Tous', 'À consommer', 'DLC proche'];
 const SHOW_STOCK_FAB = false;
 
 const NUTRI_COLORS = { A: '#2ECC71', B: '#8BC34A', C: '#F5B700', D: '#E6A23C', E: '#FF3B30' };
+
+// Food Language d'abord : un produit réel obtient sa primitive résolue (identité →
+// confiance → asset) quand elle est fiable. La ligne préfère déjà localImage à
+// img_url puis à l'emoji ; il suffit donc d'attacher localImage/localImageRatio ici.
+// Résolu une seule fois (au chargement/maj du stock), pas à chaque rendu de ligne.
+// Un item qui a déjà une primitive explicite (dataset de calibration) n'est pas
+// re-résolu — la résolution floue par nom ne concerne que les produits réels.
+function withFoodLanguage(item) {
+  if (!item || item.localImage) return item;
+  const prim = resolveFoodImage(item);
+  return prim ? { ...item, localImage: prim.image, localImageRatio: prim.ratio } : item;
+}
+
+// Natural Focus — la lumière suit la PERTINENCE temporelle. Paliers du Color System :
+// faible 15 % / moyenne 25 % / forte 40 % (plafond 40 %, jamais saturé). L'overdue
+// reçoit une présence dédiée dans la famille Critical (décision produit — teinte
+// critique choisie côté row via glowColor), PAS le halo chaud. Sans échéance connue
+// et au-delà de J+4 : silence.
+function naturalFocusIntensity(days) {
+  if (typeof days !== 'number') return 0; // sans échéance connue → aucun halo
+  if (days < 0) return 0.10;   // Dépassé — présence critique très discrète : ne doit PAS
+                               // masquer un produit clair (crème). Le rouge du point + du
+                               // descripteur porte déjà le signal ; le halo n'est qu'un appui.
+  if (days === 0) return 0.40; // Aujourd'hui — « le bon moment »
+  if (days === 1) return 0.25; // Demain — « attention »
+  if (days <= 4) return 0.15;  // Approche / présence
+  return 0;                    // Silence
+}
 
 /* ── Small reusable components ── */
 
@@ -97,7 +126,10 @@ export default function FridgeScreen({
   // Jamais actif en production (__DEV__ est toujours false en build release).
   useEffect(() => {
     const useDevPreview = __DEV__ && DEV_PREVIEW_STOCK_ENABLED;
-    setLocalItems(useDevPreview ? getDevPreviewItems() : items);
+    const base = useDevPreview
+      ? (DEV_PREVIEW_MODE === 'qa' ? getVisualQAItems() : getDevPreviewItems())
+      : items;
+    setLocalItems(base.map(withFoodLanguage));
   }, [items]);
 
   const updateItems = (updater) => { setItems(updater); setLocalItems(updater); };
@@ -133,8 +165,16 @@ export default function FridgeScreen({
       days_left: dlcDays !== null ? dlcDays : selectedItem.days_left,
       location: editFields.location,
     };
-    updateItems(p => p.map(x => x.id === selectedItem.id ? { ...x, ...updates, days: updates.days_left } : x));
-    setSelectedItem(prev => ({ ...prev, ...updates, days: updates.days_left }));
+    // Le nom a changé → la primitive Food Language peut ne plus correspondre :
+    // on la re-résout (localImage repart de zéro pour laisser withFoodLanguage
+    // trancher sur le nouveau nom). Inchangé si le nom est identique.
+    const nameChanged = updates.name !== selectedItem.name;
+    const remap = (x) => {
+      const merged = { ...x, ...updates, days: updates.days_left };
+      return nameChanged ? withFoodLanguage({ ...merged, localImage: null, localImageRatio: null }) : merged;
+    };
+    updateItems(p => p.map(x => x.id === selectedItem.id ? remap(x) : x));
+    setSelectedItem(prev => remap(prev));
     setEditMode(false);
     await supabase.from('items').update(updates).eq('id', selectedItem.id);
   };
@@ -279,7 +319,14 @@ export default function FridgeScreen({
                     <View style={{ alignItems: 'center', marginBottom: 20 }}>
                       <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: `${C.green}15`,
                         alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                        {item.img_url && !detailImgError
+                        {/* Même précédence que la liste (Food Language d'abord) : la
+                            fiche montre la primitive détourée quand elle existe, puis
+                            la photo distante, puis l'emoji — jamais un emoji quand une
+                            primitive est disponible (§25). Primitive en `contain` pour
+                            préserver son ratio, jamais recadrée en cercle. */}
+                        {item.localImage
+                          ? <Image source={item.localImage} style={{ width: 78, height: 78 }} resizeMode="contain" />
+                          : item.img_url && !detailImgError
                           ? <Image source={{ uri: item.img_url }} style={{ width: 100, height: 100, borderRadius: 50 }}
                               resizeMode="cover" onError={() => setDetailImgError(true)} />
                           : <Text style={{ fontSize: 52 }}>{item.emoji}</Text>}
@@ -459,11 +506,8 @@ export default function FridgeScreen({
       return da - db;
     });
 
-  // Natural Focus : porte le bon moment (un produit "aujourd'hui"), jamais l'état
-  // le plus problématique. Un produit "Date dépassée — vérifier" (days < 0) n'est
-  // jamais candidat — le rouge porte déjà la vérification, la lumière n'en rajoute
-  // pas. Un seul candidat maximum ; aucun candidat pertinent → aucun focus.
-  const focusedItemId = priorityItems.find(i => computeDaysRemaining(i) === 0)?.id ?? null;
+  // Natural Focus : intensité par pertinence temporelle — voir naturalFocusIntensity
+  // (module) ; calculée par ligne à partir des jours restants.
 
   // Couleurs de libellé alignées sur le Master : identité fixe par section
   // (statique, jamais conditionnelle au contenu) — le rouge de "priorité" est
@@ -491,7 +535,7 @@ export default function FridgeScreen({
           filters={FILTERS}
         />
 
-        <View style={{ paddingHorizontal: 16, marginTop: 10, marginBottom: 18 }}>
+        <View style={{ paddingHorizontal: 16, marginTop: 12, marginBottom: 16 }}>
           <StorageScopeControl active={activeScope} onChange={setActiveScope} theme={theme} fonts={fonts} />
         </View>
 
@@ -509,6 +553,42 @@ export default function FridgeScreen({
               <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: '#fff' }}>Ajouter un produit</Text>
             </TouchableOpacity>
           </View>
+        ) : filteredScoped.length === 0 ? (
+          /* ─── ZÉRO RÉSULTAT — distinct de l'espace vide (§31). L'espace contient
+                des produits, mais la recherche ou le filtre ne renvoie rien : deux
+                situations différentes, deux messages, et toujours un retour simple à
+                l'état normal. Contextual Voice : humain, sans alerte. ─── */
+          <View style={{ alignItems: 'center', paddingTop: 36, paddingHorizontal: 32, paddingBottom: 40 }}>
+            {q ? <Search size={22} color={theme.text4} strokeWidth={1.8} style={{ marginBottom: 12 }} />
+               : <Inbox size={22} color={theme.text4} strokeWidth={1.6} style={{ marginBottom: 12 }} />}
+            {q ? (
+              <>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: theme.text2, marginBottom: 6, textAlign: 'center' }}>
+                  Aucun produit pour « {q} »
+                </Text>
+                <Text style={{ fontFamily: fonts.regular, fontSize: 13.5, fontWeight: '400', color: theme.text3, textAlign: 'center', lineHeight: 20, marginBottom: 22 }}>
+                  Vérifie l'orthographe, ou cherche autrement.
+                </Text>
+                <TouchableOpacity onPress={() => setQ('')}
+                  style={{ borderRadius: 14, paddingVertical: 11, paddingHorizontal: 22, borderWidth: 1, borderColor: theme.separator }}>
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.text1 }}>Effacer la recherche</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: theme.text2, marginBottom: 6, textAlign: 'center' }}>
+                  Rien à afficher avec ce filtre
+                </Text>
+                <Text style={{ fontFamily: fonts.regular, fontSize: 13.5, fontWeight: '400', color: theme.text3, textAlign: 'center', lineHeight: 20, marginBottom: 22 }}>
+                  Dans {scopeLabel}, aucun produit ne correspond à « {activeFilter} » pour le moment.
+                </Text>
+                <TouchableOpacity onPress={() => setActiveFilter('Tous')}
+                  style={{ borderRadius: 14, paddingVertical: 11, paddingHorizontal: 22, borderWidth: 1, borderColor: theme.separator }}>
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.text1 }}>Voir tout le stock</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         ) : (
           <View style={{ paddingHorizontal: 16 }}>
             {sections.map(section => section.items.length === 0 ? null : (
@@ -517,8 +597,8 @@ export default function FridgeScreen({
               // Libellé recalibré sur le Master : traitement Overline compact
               // (UPPERCASE, tracking léger) — le Master prime sur l'échelle Title 2
               // de la Spec quand l'application littérale de celle-ci régresse le rendu.
-              <View key={section.key} style={{ marginBottom: 18 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
+              <View key={section.key} style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
                   <Text style={{ fontFamily: fonts.semibold, fontSize: 11, fontWeight: '600', letterSpacing: 0.4, color: section.labelColor }}>
                     {section.label.toUpperCase()}
                   </Text>
@@ -531,7 +611,7 @@ export default function FridgeScreen({
                     theme={theme}
                     fonts={fonts}
                     tier={section.key}
-                    isFocused={item.id === focusedItemId}
+                    focusIntensity={naturalFocusIntensity(computeDaysRemaining(item))}
                     isLast={idx === section.items.length - 1}
                     onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
                   />

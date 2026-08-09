@@ -1,5 +1,38 @@
 # Changelog — Frigy
 
+## LOT 02 — Mon Stock — LOCKED V1 — 2026-08-09
+
+Écran Mon Stock convergé et verrouillé pour V1 (validé sur iPhone / Expo Go).
+
+### Architecture validée
+- **Priority-first** : sections « À utiliser en priorité » / « À utiliser prochainement » / « Plus tard » (tri temporel).
+- **Storage Scope** : Frigo / Congélateur / Placard (segmented control, un espace à la fois).
+- **États vides distincts** : espace vide / recherche sans résultat / filtre sans résultat.
+
+### Food Language
+- Registry central `src/utils/foodLanguage.js` : **192 primitives** (ratios dérivés des dimensions réelles) + `getPrimitive(key)` + `resolveFoodImage()` (résolution déterministe nom→identité→asset, aliases, fallback → null → img_url → emoji ; **aucune dépendance GS1**).
+- Branché dans Mon Stock (produits réels + datasets DEV) ; aucun hardcode d'image ni logique par aliment dans `InventoryProductRow`.
+- Tests : `node src/utils/foodLanguage.test.js` → 56/56.
+
+### Natural Focus (statique V1)
+- Tokens `focusGlowPriority` #FFD39A · `focusGlowUpcoming` #FFE6C2 · `focusGlowCritical` #FF4B4B (overdue, présence discrète).
+- Intensités (paliers DS) : Aujourd'hui 0.40 · Demain 0.25 · J+2–4 0.15 · overdue 0.10 · Plus tard 0.
+- Nappe de contact horizontale (glowSize haloSize+24, cx50/cy55/r55, ellipse scaleX 1.20/scaleY 0.65, falloff longue-queue) — bornée à la ligne (ne touche pas les séparateurs). Sélection de teinte par statut.
+
+### Datasets DEV (jamais en production — gardés par `__DEV__`)
+- `DEV_PREVIEW_MODE` : `'qa'` (~48 produits crédibles Frigo/Congélateur/Placard, pour la QA visuelle) · `'stress'` (~192, stress test scroll/rendu).
+
+### RevenueCat / Expo Go
+- `Purchases.configure` sauté dans Expo Go (`Constants.appOwnership === 'expo'`) — inchangé en dev build / TestFlight / prod.
+
+### Qualité
+- Parse OK · resolver 56/56 · bundle iOS OK · aucun code diagnostic résiduel.
+
+### Limites connues — FUTURE QA (non bloquant, pas des bugs)
+1. Validation Dark Mode du Natural Focus (teintes Light conservées en Dark pour V1).
+2. Prototype éventuel « breathing motion » très subtil sur les items J0 (A/B séparé).
+3. Calibrations futures uniquement si un problème est observé en usage réel.
+
 ## [1.0.4] — 2026-05-16
 
 ### Ajouté

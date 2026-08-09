@@ -10,8 +10,11 @@ export default function InventoryHeader({ theme, fonts, query, onQueryChange, ac
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // paddingHorizontal 16 = marge de contenu (scope control, sections, rows) : le titre
+  // s'aligne sur tout le reste (Spatial §01 « aligner ce qui se ressemble »).
+  // paddingTop 16 = pas de base de l'échelle spatiale.
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 }}>
+    <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         {/* Titre mis en avant — toujours Source Sans 3 SemiBold (le serif du Master
             reste une dépendance non résolue, voir échange précédent) : on gagne en
@@ -20,6 +23,9 @@ export default function InventoryHeader({ theme, fonts, query, onQueryChange, ac
         <View style={{ flexDirection: 'row', gap: 7 }}>
           <TouchableOpacity
             onPress={() => setSearchOpen(o => !o)}
+            accessibilityRole="button"
+            accessibilityLabel="Rechercher un produit"
+            accessibilityState={{ expanded: searchOpen }}
             style={{
               width: 33, height: 33, borderRadius: 16.5, backgroundColor: theme.surface,
               alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.separator,
@@ -28,6 +34,9 @@ export default function InventoryHeader({ theme, fonts, query, onQueryChange, ac
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setFiltersOpen(o => !o)}
+            accessibilityRole="button"
+            accessibilityLabel="Filtrer le stock"
+            accessibilityState={{ expanded: filtersOpen }}
             style={{
               width: 33, height: 33, borderRadius: 16.5, backgroundColor: theme.surface,
               alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.separator,

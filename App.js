@@ -5,6 +5,7 @@ import { useState, useEffect, Component } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
+import Constants from 'expo-constants';
 import { Home, Refrigerator, Apple, User, Plus } from 'lucide-react-native';
 
 import { supabase } from './src/config/supabase';
@@ -93,6 +94,12 @@ function App() {
   });
 
   useEffect(() => {
+    // RevenueCat a besoin du module natif du store, absent dans Expo Go : y appeler
+    // Purchases.configure jette « Invalid API key… native store not available » (log
+    // console.error du SDK). On saute donc la config dans Expo Go — inchangé pour les
+    // dev builds / TestFlight / production, où le natif est présent et configure normalement.
+    const isExpoGo = Constants.appOwnership === 'expo';
+    if (isExpoGo) return;
     try {
       if (Purchases && RC_API_KEY) {
         Purchases.configure({ apiKey: RC_API_KEY });
