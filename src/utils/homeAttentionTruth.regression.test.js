@@ -41,21 +41,25 @@ ok('WATCH consomme it.watchDays', watch.includes('it.watchDays'));
 ok('WATCH no getTemporalColorKey (aucune couleur d\'alerte passive)', !watch.includes('getTemporalColorKey'));
 ok('WATCH puce NEUTRE (theme.text4)', watch.includes('const dot = theme.text4'));
 
-// ── Lisibilité du foyer : UNKNOWN ≠ vide/calme ──
+// ── Lisibilité du foyer (N6-14) : autorité de mode serveur ; UNKNOWN ≠ vide/First Run ──
 ok('SCREEN reçoit itemsReady', screen.includes('itemsReady'));
-ok('SCREEN branche not-ready NEUTRE avant EMPTY', screen.includes('!ready ?'));
-ok('SCREEN ordre : First Run → not-ready → EMPTY', (() => {
-  const iFirst = screen.indexOf('isFirstRun ?');
-  const iReady = screen.indexOf('!ready ?');
-  const iEmpty = screen.indexOf('HOME_LEVEL.EMPTY ?');
-  return iFirst > 0 && iReady > iFirst && iEmpty > iReady;
+ok('SCREEN mode via resolveHomeMode (autorité serveur)', screen.includes('resolveHomeMode({'));
+ok('SCREEN branche NEUTRE (mode NEUTRAL) présente', screen.includes('mode === HOME_MODE.NEUTRAL ?'));
+ok('SCREEN ordre : First Run → NEUTRAL → EMPTY', (() => {
+  const iFirst = screen.indexOf('mode === HOME_MODE.FIRST_RUN ?');
+  const iNeutral = screen.indexOf('mode === HOME_MODE.NEUTRAL ?');
+  const iEmpty = screen.indexOf('mode === HOME_MODE.EMPTY ?');
+  return iFirst > 0 && iNeutral > iFirst && iEmpty > iNeutral;
 })());
-ok('SCREEN not-ready précède le rendu EmptyStock (jamais interprété comme vide)',
-  screen.indexOf('!ready ?') > 0 && screen.indexOf('!ready ?') < screen.indexOf('<HomeEmptyStock'));
-ok('SCREEN not-ready précède l\'état C (jamais interprété comme foyer connu)',
-  screen.indexOf('!ready ?') > 0 && screen.indexOf('!ready ?') < screen.indexOf('state === HOME_STATE.C'));
-ok('SCREEN QA dev reste « prêt » (préserve les previews)', screen.includes('ready = qa ? true : itemsReady'));
+ok('SCREEN NEUTRAL précède le rendu EmptyStock (jamais interprété comme vide)',
+  screen.indexOf('mode === HOME_MODE.NEUTRAL ?') > 0 && screen.indexOf('mode === HOME_MODE.NEUTRAL ?') < screen.indexOf('<HomeEmptyStock'));
+ok('SCREEN NEUTRAL précède l\'état C actif (jamais interprété comme foyer connu)',
+  screen.indexOf('mode === HOME_MODE.NEUTRAL ?') > 0 && screen.indexOf('mode === HOME_MODE.NEUTRAL ?') < screen.indexOf('state === HOME_STATE.C'));
+ok('SCREEN First Run exige never_initialized prouvé (jamais un flag device)', !screen.includes('stockInitialized') && !screen.includes('frigy_stock_initialized'));
+ok('SCREEN QA dev conserve les previews (scénario → mode)', screen.includes('qa.firstRun ? HOME_MODE.FIRST_RUN'));
 ok('APP passe itemsReady = hydratedFamilyId === familyId', app.includes('itemsReady={familyId != null && hydratedFamilyId === familyId}'));
+ok('APP passe l\'autorité de cycle de vie serveur (lifecycleState + lifecycleReady)', app.includes('lifecycleState={') && app.includes('lifecycleReady={lifecycleReady}'));
+ok('APP n\'utilise plus le flag device frigy_stock_initialized comme autorité First Run', !app.includes("AsyncStorage.getItem('frigy_stock_initialized')"));
 
 // ── N6-13 (2.6, CR-22) : « priorité absente » ne devient JAMAIS un calme global explicite ──
 ok('CALM no « Rien ne demande ton attention » (HomeScreen)', !screen.includes('Rien ne demande ton attention'));

@@ -72,7 +72,11 @@ ok('NOTIF NotificationsModal supprimé', !profile.includes('NotificationsModal')
 ok('NOTIF NOTIF_OPTIONS supprimé', !profile.includes('NOTIF_OPTIONS'));
 ok('NOTIF MOCK_NOTIFS supprimé', !profile.includes('MOCK_NOTIFS'));
 ok('NOTIF entrée menu « notifs » supprimée', !profile.includes("id: 'notifs'"));
-ok('NOTIF ProfileScreen n\'écrit plus notification_prefs', !profile.includes('notification_prefs'));
+// N6-14 : la surface de préférences est retirée (aucune persistance depuis un toggle). Le SEUL usage
+// restant de notification_prefs est la RÉINITIALISATION à null lors de l'effacement des données (N6-14).
+ok('NOTIF ProfileScreen ne PERSISTE plus de prefs depuis un toggle', !profile.includes('notification_prefs: updated') && !profile.includes('update({ notification_prefs: updated'));
+ok('NOTIF le seul notification_prefs restant est le reset d\'effacement (→ null)',
+  !profile.includes('notification_prefs') || profile.includes('notification_prefs: null'));
 ok('NOTIF ProfileScreen n\'importe plus Switch/Bell', !/[,{]\s*Switch\b/.test(profile) && !/\bBell\b/.test(profile));
 
 // App.js : récaps mensongers supprimés, gate N6-03 PRÉSERVÉ
@@ -101,6 +105,29 @@ ok('ACCOUNT échec n\'implique pas de rollback complet', !profile.includes('annu
 // L'action ne DOIT PAS avoir été élargie (pas de suppression avatar/Storage/Auth/RevenueCat/AsyncStorage)
 ok('ACCOUNT deletion NON élargie (pas de remove avatars/Storage)', !profile.includes("storage.from('avatars').remove") || (profile.match(/storage\.from\('avatars'\)\.remove/g) || []).length <= 1);
 ok('ACCOUNT no Auth admin.deleteUser / Edge Function', !profile.includes('admin.deleteUser') && !profile.includes('functions.invoke'));
+
+// ── N6-14 (CR-08) : identité de foyer PRÉSERVÉE + vérité d'effacement (aucune erreur → faux succès) ──
+ok('ERASE ne supprime PLUS la ligne profiles (update-reset, préserve family_id)', !profile.includes("from('profiles').delete()") && profile.includes("from('profiles').update({"));
+ok('ERASE préserve l\'identité de membre (id/family_id/role/avatar NON réinitialisés)',
+  !profile.includes('family_id: null') && !profile.includes('role: null') && !profile.includes('avatar_url: null'));
+ok('ERASE réinitialise les données personnelles (name/phone/prefs/push/score/streak/last_opened)',
+  profile.includes('name: null') && profile.includes('phone: null') && profile.includes('notification_prefs: null') && profile.includes('push_token: null') && profile.includes('score: 0') && profile.includes('streak: 0') && profile.includes('last_opened: null'));
+// Chaque mutation vérifie {error} et throw → aucune erreur n'atteint le signOut de succès.
+ok('ERASE wrapper vérifie {error} et throw', profile.includes('const { error } = await p; if (error) throw error;'));
+ok('ERASE toutes les mutations passent par run() (items/shopping/recipes/scan/profiles)',
+  profile.includes("run(supabase.from('items').delete") && profile.includes("run(supabase.from('shopping_items').delete") && profile.includes("run(supabase.from('saved_recipes').delete") && profile.includes("run(supabase.from('scan_history').delete") && profile.includes("run(supabase.from('profiles').update"));
+// N6-14 (2A.7) : l'échec d'effacement RETOURNE avant la déconnexion (aucune erreur d'effacement
+// n'atteint le signOut de succès) ; l'issue de déconnexion est DISTINCTE.
+ok('ERASE échec → return AVANT signOut', (() => {
+  const iProfiles = profile.indexOf("run(supabase.from('profiles').update");
+  const iCatch = profile.indexOf('} catch (e) {', iProfiles);
+  const iReturn = profile.indexOf('return;', iCatch);
+  const iSignOut = profile.indexOf('supabase.auth.signOut()', iProfiles);
+  return iProfiles > 0 && iCatch > iProfiles && iReturn > iCatch && iSignOut > iReturn;
+})());
+ok('ERASE échec → « Suppression incomplète » (reste authentifié, retry)', profile.includes('Suppression incomplète'));
+ok('SIGNOUT issue DISTINCTE : {error} inspecté explicitement', profile.includes('signOutError = (r && r.error)') || profile.includes('signOutError ='));
+ok('SIGNOUT échec ≠ « incomplète » → « Données effacées » + déconnexion échouée', profile.includes('Données effacées') && profile.includes('déconnexion a échoué'));
 
 console.log(`\nprofileImpactTruth: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

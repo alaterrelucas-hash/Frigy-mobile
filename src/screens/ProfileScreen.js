@@ -352,21 +352,45 @@ export default function ProfileScreen({ profileName, user, familyId, entitlement
           text: 'Effacer',
           style: 'destructive',
           onPress: async () => {
+            // N6-14 (2A.6) : le client Supabase NE LÈVE PAS sur erreur (il renvoie {error}). On inspecte
+            // donc CHAQUE résultat : toute erreur → throw → chemin d'échec ci-dessous. AUCUNE erreur
+            // d'effacement ne peut atteindre le signOut de succès (sinon on annoncerait « effacé » à tort).
+            // Ces requêtes ne sont PAS une transaction unique → un échec = effacement PARTIEL ; l'utilisateur
+            // reste authentifié et peut réessayer (les DELETE/UPDATE déjà passés sont idempotents au retry).
+            const run = async (p) => { const { error } = await p; if (error) throw error; };
+            // ── ÉTAPE 1 : EFFACEMENT DES DONNÉES (chaque {error} → throw ; échec = incomplet) ──
             try {
               if (familyId) {
-                await supabase.from('items').delete().eq('family_id', familyId);
-                await supabase.from('shopping_items').delete().eq('family_id', familyId);
+                await run(supabase.from('items').delete().eq('family_id', familyId));
+                await run(supabase.from('shopping_items').delete().eq('family_id', familyId));
               }
               if (user?.id) {
-                await supabase.from('saved_recipes').delete().eq('user_id', user.id);
-                await supabase.from('scan_history').delete().eq('user_id', user.id);
-                await supabase.from('profiles').delete().eq('id', user.id);
+                await run(supabase.from('saved_recipes').delete().eq('user_id', user.id));
+                await run(supabase.from('scan_history').delete().eq('user_id', user.id));
+                // N6-14 (CR-08) : on NE SUPPRIME PLUS la ligne profiles — cela détruisait l'identité du
+                // foyer (family_id) → setup_user_profile recréait une NOUVELLE famille et le cycle de vie
+                // « déjà initialisé » était perdu (First Run réapparaissait à tort). On RÉINITIALISE les
+                // « informations de profil » du contrat visible, en PRÉSERVANT l'identité de membre (id,
+                // family_id, role) et la photo (avatar_url, explicitement conservée par la copie).
+                await run(supabase.from('profiles').update({
+                  name: null, phone: null, notification_prefs: null,
+                  push_token: null, score: 0, streak: 0, last_opened: null,
+                }).eq('id', user.id));
               }
-              await supabase.auth.signOut();
             } catch (e) {
-              // Échec partiel possible : on reste authentifié (pas de signOut) et on le dit honnêtement.
+              // A. ÉCHEC D'EFFACEMENT : effacement PARTIEL possible. On reste authentifié ; retry autorisé.
               Alert.alert('Suppression incomplète', 'La suppression n\'a pas pu être terminée. Certaines données peuvent déjà avoir été supprimées. Réessaie, ou contacte-nous à support@frigy.app');
+              return;
             }
+            // ── ÉTAPE 2 : DÉCONNEXION (issue DISTINCTE). Les données SONT effacées à ce point. ──
+            let signOutError = null;
+            try { const r = await supabase.auth.signOut(); signOutError = (r && r.error) || null; }
+            catch (e) { signOutError = e; }
+            if (signOutError) {
+              // C. DONNÉES EFFACÉES mais DÉCONNEXION ÉCHOUÉE → surface honnêtement (jamais « incomplète »).
+              Alert.alert('Données effacées', 'Tes données ont bien été effacées, mais la déconnexion a échoué. Réessaie de te déconnecter.');
+            }
+            // B. Succès effacement + déconnexion → l'app repasse en écran de connexion (rien à afficher).
           },
         },
       ]

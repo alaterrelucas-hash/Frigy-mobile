@@ -82,17 +82,14 @@ function App() {
   // anti-réponse-périmée (famille A qui répond après un switch vers B n'écrase pas B).
   const [hydratedFamilyId, setHydratedFamilyId] = useState(null);
   const fetchReqRef = useRef(0);
-  // Distingue FIRST_RUN (jamais initialisé) d'EMPTY_STOCK (déjà utilisé, stock redevenu vide).
-  // null = inconnu (on ne montre pas First Run tant qu'on ne sait pas). Le flag passe à true
-  // la 1ʳᵉ fois que le stock devient non-vide, et le reste (retour = EMPTY_STOCK, pas First Run).
-  const [stockInitialized, setStockInitialized] = useState(null);
-  useEffect(() => { AsyncStorage.getItem('frigy_stock_initialized').then((v) => setStockInitialized(v === '1')); }, []);
-  useEffect(() => {
-    if (items.length > 0 && stockInitialized === false) {
-      AsyncStorage.setItem('frigy_stock_initialized', '1');
-      setStockInitialized(true);
-    }
-  }, [items.length, stockInitialized]);
+  // N6-14 (CR-08) : FIRST_RUN vs EMPTY_STOCK est désormais AUTORITAIRE CÔTÉ SERVEUR (household_lifecycle),
+  // household-scopé, durable à travers reinstall/new device/erase — plus aucune autorité AsyncStorage
+  // (l'ancien flag `frigy_stock_initialized` device-scopé est abandonné). `lifecycle` = {state} ou null
+  // (ligne absente / non chargée) ; `lifecycleReady` passe true après un fetch réussi pour la famille
+  // courante. UNKNOWN/erreur ≠ NEVER → neutre côté Home.
+  const [lifecycle, setLifecycle] = useState(null);
+  const [lifecycleReady, setLifecycleReady] = useState(false);
+  const lifecycleReqRef = useRef(0);
   const [user, setUser] = useState(null);
   const [familyId, setFamilyId] = useState(null);
   const [profileName, setProfileName] = useState('');
@@ -150,7 +147,7 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
       if (session?.user) setupProfile(session.user.id);
-      else { setFamilyId(null); setItems([]); setHydratedFamilyId(null); posthog.reset(); } // N6-09 : invalide la lisibilité du compte
+      else { setFamilyId(null); setItems([]); setHydratedFamilyId(null); lifecycleReqRef.current++; setLifecycle(null); setLifecycleReady(false); posthog.reset(); } // N6-09/N6-14 : invalide compte + cycle de vie
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -192,6 +189,7 @@ function App() {
       setFamilyId(profile.family_id);
       if (profile.notification_prefs) setNotifPrefs(profile.notification_prefs);
       fetchItems(profile.family_id);
+      fetchLifecycle(profile.family_id);
       registerPushToken(userId);
       posthog.identify(userId, { name: finalName, family_id: profile.family_id });
     }
@@ -213,6 +211,22 @@ function App() {
     setItems(mapped);
     setHydratedFamilyId(famId);                // N6-09 : compte KNOWN pour CETTE famille (0 ligne inclus)
     enrichItemImages(mapped);
+  };
+
+  // N6-14 : lit l'autorité de cycle de vie du foyer (household_lifecycle). Garde anti-réponse-périmée
+  // scopée famille (jeton `lifecycleReqRef`, cf. fetchItems). Erreur → NON prêt (neutre). Ligne absente
+  // (data null) → prêt mais state null = UNKNOWN (jamais interprété NEVER côté Home).
+  const fetchLifecycle = async (famId) => {
+    const reqId = ++lifecycleReqRef.current;
+    const { data, error } = await supabase
+      .from('household_lifecycle')
+      .select('state')
+      .eq('family_id', famId)
+      .maybeSingle();
+    if (lifecycleReqRef.current !== reqId) return; // réponse périmée (famille A après switch vers B) → ignorer
+    if (error) { setLifecycleReady(false); return; } // échec → pas d'autorité → neutre
+    setLifecycle({ state: data ? data.state : null });
+    setLifecycleReady(true);
   };
 
   // LOW A « Confirmation Intelligente » — ajout RÉEL d'un produit confirmé « Je l'ai ».
@@ -342,7 +356,7 @@ function App() {
         <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }} />
       ) : (
         <SafeAreaView style={styles.safe}>
-          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} onConfirmHave={handleConfirmHave} streak={streak} stockFontsLoaded={stockFontsLoaded} firstRun={stockInitialized === false && items.length === 0} itemsReady={familyId != null && hydratedFamilyId === familyId} />}
+          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} onConfirmHave={handleConfirmHave} streak={streak} stockFontsLoaded={stockFontsLoaded} itemsReady={familyId != null && hydratedFamilyId === familyId} lifecycleState={lifecycle ? lifecycle.state : null} lifecycleReady={lifecycleReady} />}
           {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} stockFontsLoaded={stockFontsLoaded} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
           {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} entitlement={entitlement} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }}

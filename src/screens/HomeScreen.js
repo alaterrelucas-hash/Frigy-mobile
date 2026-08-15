@@ -4,6 +4,7 @@ import { Bell, User } from 'lucide-react-native';
 import { useStockTheme } from '../utils/stockTheme';
 import useHomeSuggestion from '../hooks/useHomeSuggestion';
 import { HOME_STATE, HOME_LEVEL, transformationOverline } from '../utils/homeLogic';
+import { resolveHomeMode, HOME_MODE } from '../utils/householdLifecycle';
 import { DEV_HOME_MODE, getHomeQAScenario } from '../utils/devPreviewHome';
 import HomePriorityFocus from '../components/home/HomePriorityFocus';
 import HomeGathering from '../components/home/HomeGathering';
@@ -18,7 +19,7 @@ import HomeLowStock from '../components/home/HomeLowStock';
 // Home — point de décision domestique (Home Master V1.2). Cycle : Prioriser → Relier →
 // Transformer → Compléter. Pas de dashboard, pas de stats, pas de cards empilées :
 // composition, espace, Food Language, Natural Focus (un seul foyer), Contextual Voice.
-export default function HomeScreen({ items = [], profileName, onNav, onItemPress, onShopping, onScan, onConfirmHave, stockFontsLoaded, firstRun = false, itemsReady = true }) {
+export default function HomeScreen({ items = [], profileName, onNav, onItemPress, onShopping, onScan, onConfirmHave, stockFontsLoaded, itemsReady = false, lifecycleState = null, lifecycleReady = false }) {
   const theme = useStockTheme();
   const fonts = {
     regular: stockFontsLoaded ? 'SourceSans3-Regular' : undefined,
@@ -34,13 +35,13 @@ export default function HomeScreen({ items = [], profileName, onNav, onItemPress
     [],
   );
   const data = qa ? qa.items : items;
-  // FIRST RUN (stock jamais initialisé) : piloté par le scénario QA 'first', ou en prod par
-  // la prop `firstRun` (à câbler côté App — voir gap documenté). Distinct de EMPTY_STOCK.
-  const isFirstRun = qa ? !!qa.firstRun : !!firstRun;
-  // N6-13 (CR-22) : LISIBILITÉ DU FOYER. Aucune revendication d'état foyer (Empty/LOW/SUFFICIENT/
-  // priorité/watch) tant que le stock n'est pas hydraté pour la famille courante. UNKNOWN ≠ vide/calme.
-  // First Run reste indépendant (piloté par stockInitialized). Les scénarios QA (dev) sont « prêts ».
-  const ready = qa ? true : itemsReady;
+  // N6-14 (CR-08) : MODE Home autoritaire (serveur). First Run / Empty Returning / Active / Neutre sont
+  // décidés par la lisibilité du foyer (household_lifecycle), household-scopée. UNKNOWN/legacy/erreur →
+  // NEUTRE (jamais First Run/Empty fabriqués). Stock actif prouve l'initialisation → ACTIVE. QA (dev)
+  // dérive un mode depuis le scénario (jamais de fetch réel).
+  const mode = qa
+    ? (qa.firstRun ? HOME_MODE.FIRST_RUN : (data.length === 0 ? HOME_MODE.EMPTY : HOME_MODE.ACTIVE))
+    : resolveHomeMode({ itemsReady, lifecycleReady, activeCount: items.length, lifecycleState });
   // isDark → thème clair (White) réchauffe l'image de résultat (variante warm en cache) ;
   // Dark reste neutre. Voir useHomeSuggestion → resolveRecipeImage.
   const overrideOpts = useMemo(
@@ -82,21 +83,21 @@ export default function HomeScreen({ items = [], profileName, onNav, onItemPress
           pas de scroll sur écran standard ; scroll de sécurité si trop petit). Autres états :
           paddingBottom = respiration finale avant la Bottom Nav. */}
       <ScrollView showsVerticalScrollIndicator={false}
-        contentContainerStyle={(isFirstRun || level === HOME_LEVEL.EMPTY) ? { flexGrow: 1, paddingBottom: 16 } : { paddingBottom: 64 }}>
+        contentContainerStyle={(mode === HOME_MODE.FIRST_RUN || mode === HOME_MODE.EMPTY) ? { flexGrow: 1, paddingBottom: 16 } : { paddingBottom: 64 }}>
 
-        {isFirstRun ? (
-          /* FIRST RUN HOME — hero + mascotte + histoire + action. Top Bar/Nav inchangés. */
+        {mode === HOME_MODE.FIRST_RUN ? (
+          /* FIRST RUN HOME — foyer PROUVÉ jamais initialisé (autorité serveur) + 0 actif. */
           <HomeFirstRun firstName={firstName} theme={theme} fonts={fonts} onAddProducts={onScan} />
-        ) : !ready ? (
-          /* NOT READY (foyer non hydraté / échec de fetch) — état NEUTRE non-assertif : greeting seul,
-             aucune revendication d'état foyer (ni « vide », ni « rien ne presse », ni priorité/watch). */
+        ) : mode === HOME_MODE.NEUTRAL ? (
+          /* NEUTRE — autorité indisponible (compte/cycle de vie non prêt, erreur) OU legacy_unknown.
+             Aucune revendication d'état foyer (ni First Run, ni « vide », ni « rien ne presse »). Greeting seul. */
           <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
             <Text style={{ fontFamily: 'Georgia', fontSize: 34, fontWeight: '600', letterSpacing: -0.34, lineHeight: 40, color: theme.text1 }}>
               {firstName ? `Bonjour ${firstName}` : 'Bonjour'}
             </Text>
           </View>
-        ) : level === HOME_LEVEL.EMPTY ? (
-          /* EMPTY_STOCK — utilisateur DÉJÀ initialisé, stock redevenu vide (≠ First Run). Sans mascotte. */
+        ) : mode === HOME_MODE.EMPTY ? (
+          /* EMPTY RETURNING — foyer PROUVÉ initialisé + 0 actif (≠ First Run). Sans mascotte. */
           <HomeEmptyStock firstName={firstName} theme={theme} fonts={fonts} />
         ) : (
         <>
