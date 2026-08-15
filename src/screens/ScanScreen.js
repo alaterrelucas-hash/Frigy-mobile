@@ -12,7 +12,7 @@ import { SUPABASE_KEY } from '../config/supabase';
 import { posthog } from '../config/posthog';
 import { EDGE_FN_URL, RECEIPT_FN_URL } from '../config/urls';
 import { C, LOC_ITEMS, urgBg } from '../config/constants';
-import { FREE_ITEMS_LIMIT } from '../config/purchases';
+import { decideAddItems, CAP_DECISION } from '../utils/capEnforcement';
 import { parseDlc, formatDlcInput, normalizeDlc, suggestLocation, estimateDays } from '../utils/product';
 import { searchSpoonacular } from '../api/spoonacular';
 import { searchOpenFoodFacts, searchImageByName } from '../api/openfoodfacts';
@@ -69,7 +69,17 @@ const PHOTO_METHODS_CONFIG = [
 
 const RECEIPT_FREE_KEY = 'frigy_receipt_free_used';
 
-export default function ScanScreen({ onClose, setItems, items, user, familyId, isPro, onPaywall }) {
+export default function ScanScreen({ onClose, setItems, items, user, familyId, isPro, onPaywall, countReady }) {
+  // N6-09 (CR-18) : décision de création centralisée + mapping raison→feedback (une seule source
+  // pour les 4 writers). Renvoie true si BLOQUÉ (aucune écriture) : compte inconnu → Alert neutre de
+  // chargement (JAMAIS le paywall) ; limite atteinte → paywall existant. Compte = `items` réel.
+  const capBlocked = (addCount) => {
+    const dec = decideAddItems({ isPro, countReady, activeCount: items?.length ?? 0, addCount });
+    if (dec.allowed) return false;
+    if (dec.reason === CAP_DECISION.DENY_COUNT_UNAVAILABLE) Alert.alert('Stock en cours de chargement', 'Réessaie dans un instant.');
+    else onPaywall?.();
+    return true;
+  };
   const [mode, setMode] = useState('choice');
   const [receiptFreeUsed, setReceiptFreeUsed] = useState(false);
 
@@ -279,6 +289,11 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   const saveReceiptProducts = async () => {
     const toSave = (receiptData?.items || []).filter(p => receiptSelectedIds.includes(p._id));
     if (!toSave.length) return;
+    // N6-09 (CR-18) : décision AVANT toute écriture. Lot atomique : si le LOT entier ne tient pas sous
+    // la limite → refus TOTAL (zéro insert, aucun clamp). Compte inconnu → attente neutre (pas de
+    // paywall). Dans les DEUX cas de refus : `receiptData`/sélection PRÉSERVÉS (pas de re-scan),
+    // `setReceiptSaving` non déclenché → rien à réinitialiser.
+    if (capBlocked(toSave.length)) return;
     setReceiptSaving(true);
     const rows = toSave.map(p => ({
       family_id: familyId,
@@ -384,7 +399,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
 
   const addProduct = async () => {
     if (!result) return;
-    if (!isPro && (items?.length ?? 0) >= FREE_ITEMS_LIMIT) { onPaywall?.(); return; }
+    if (capBlocked(1)) return; // N6-09 (CR-18) : compte inconnu → attente neutre ; limite → paywall
     const finalName = result.source === 'Manuel' ? (manualName.trim() || 'Produit') : result.name;
     const dlcDays = parseDlc(dlcInput);
     const newItem = {
@@ -492,6 +507,10 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   const savePhotoProducts = async () => {
     const toSave = (detectedProducts || []).filter(p => selectedIds.includes(p._id));
     if (!toSave.length) return;
+    // N6-09 (CR-18) : même décision centralisée (photo reste gatée Pro à l'entrée — inchangé — mais
+    // ne dérive pas d'un cap indépendant). Lot atomique ; refus préserve la sélection ; `setSaving`
+    // non déclenché → rien à réinitialiser.
+    if (capBlocked(toSave.length)) return;
     setSaving(true);
     const rows = toSave.map(p => ({
       family_id: familyId,

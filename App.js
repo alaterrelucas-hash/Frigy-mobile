@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Platform, Alert } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
-import { useState, useEffect, Component } from 'react';
+import { useState, useEffect, useRef, Component } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
@@ -12,7 +12,7 @@ import { supabase } from './src/config/supabase';
 import { initSentry, Sentry } from './src/config/sentry';
 import { posthog } from './src/config/posthog';
 import { C } from './src/config/constants';
-import { FREE_ITEMS_LIMIT } from './src/config/purchases';
+import { decideAddItems, CAP_DECISION } from './src/utils/capEnforcement';
 import { estimateDays, suggestLocation } from './src/utils/product';
 import { buildAssertionProvenance, CAPTURE_METHOD } from './src/utils/captureProvenance';
 import { selectExpiryPushes, buildNeutralPushContent } from './src/utils/notificationGate';
@@ -75,6 +75,12 @@ Notifications.setNotificationHandler({
 function App() {
   const [tab, setTab] = useState('home');
   const [items, setItems] = useState([]);
+  // N6-09 (CR-18) : lisibilité du compte SCOPÉE À LA FAMILLE. `items=[]` initial n'est PAS un foyer
+  // vide connu. Un compte n'est autoritatif pour le cap QUE si hydratedFamilyId === familyId courant
+  // (fetch réussi, 0 ligne inclus). Échec fetch → NE marque PAS prêt. Jeton de requête = garde
+  // anti-réponse-périmée (famille A qui répond après un switch vers B n'écrase pas B).
+  const [hydratedFamilyId, setHydratedFamilyId] = useState(null);
+  const fetchReqRef = useRef(0);
   // Distingue FIRST_RUN (jamais initialisé) d'EMPTY_STOCK (déjà utilisé, stock redevenu vide).
   // null = inconnu (on ne montre pas First Run tant qu'on ne sait pas). Le flag passe à true
   // la 1ʳᵉ fois que le stock devient non-vide, et le reste (retour = EMPTY_STOCK, pas First Run).
@@ -142,7 +148,7 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
       if (session?.user) setupProfile(session.user.id);
-      else { setFamilyId(null); setItems([]); posthog.reset(); }
+      else { setFamilyId(null); setItems([]); setHydratedFamilyId(null); posthog.reset(); } // N6-09 : invalide la lisibilité du compte
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -193,14 +199,17 @@ function App() {
   };
 
   const fetchItems = async (famId) => {
-    const { data } = await supabase
+    const reqId = ++fetchReqRef.current; // N6-09 : jeton « dernière requête gagne »
+    const { data, error } = await supabase
       .from('items')
       .select('*')
       .eq('family_id', famId)
       .eq('consumed', false);
-    if (!data) return;
+    if (fetchReqRef.current !== reqId) return; // réponse périmée (un fetch plus récent l'emporte) → ignorer
+    if (error || !data) return;                // N6-09 : échec fetch → NE PAS marquer prêt (UNKNOWN ≠ ZERO)
     const mapped = data.map(i => ({ ...i, days: i.days_left, emoji: i.emoji || '🛒' }));
     setItems(mapped);
+    setHydratedFamilyId(famId);                // N6-09 : compte KNOWN pour CETTE famille (0 ligne inclus)
     enrichItemImages(mapped);
   };
 
@@ -210,7 +219,14 @@ function App() {
   // Home se fait naturellement via setItems (re-render → richness/signals/candidats recalculés).
   const handleConfirmHave = async (cand, opts = {}) => {
     if (!cand?.name || !familyId) return;
-    if (!isPro && (items?.length ?? 0) >= FREE_ITEMS_LIMIT) { setPaywallOpen(true); return; }
+    // N6-09 (CR-18) : compte lisible SEULEMENT si hydraté pour la famille courante. Compte inconnu →
+    // refus NEUTRE (chargement), JAMAIS le paywall (inconnu ≠ limite atteinte). Pro : jamais bloqué.
+    const countReady = familyId != null && hydratedFamilyId === familyId;
+    const dec = decideAddItems({ isPro, countReady, activeCount: items?.length ?? 0, addCount: 1 });
+    if (!dec.allowed) {
+      if (dec.reason === CAP_DECISION.DENY_COUNT_UNAVAILABLE) { Alert.alert('Stock en cours de chargement', 'Réessaie dans un instant.'); return; }
+      setPaywallOpen(true); return;
+    }
     const category = 'Épicerie';
     const quantity = opts.quantity || 1;
     const days = estimateDays(category, cand.name);
@@ -392,7 +408,7 @@ function App() {
 
           <Modal visible={scanOpen} animationType="slide">
             <SafeAreaProvider>
-              <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} items={items} user={user} familyId={familyId} isPro={isPro} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }} />
+              <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} items={items} user={user} familyId={familyId} isPro={isPro} countReady={familyId != null && hydratedFamilyId === familyId} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }} />
             </SafeAreaProvider>
           </Modal>
 
