@@ -28,7 +28,7 @@ BEGIN;
 CREATE OR REPLACE FUNCTION public.household_lifecycle_tracking_cutoff()
 RETURNS timestamptz
 LANGUAGE sql IMMUTABLE
-AS $$ SELECT '2026-08-16T00:00:00Z'::timestamptz $$;
+AS $$ SELECT '2026-08-15T18:22:18Z'::timestamptz $$;
 
 -- ---------------------------------------------------------------------------
 -- 1. TABLE
