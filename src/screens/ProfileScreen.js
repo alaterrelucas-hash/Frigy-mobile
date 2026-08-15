@@ -1,76 +1,49 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Alert, Share,
-  Linking, Modal, TextInput, Switch, Image,
+  Linking, Modal, TextInput, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronRight, Info,
-  Leaf, Trash2, Coins,
-  User, Bell, HelpCircle,
-  Camera, Share2, CheckCircle2, X, Star, Crown,
+  Leaf, Trash2,
+  User, HelpCircle,
+  Camera, Share2, X, Star, Crown,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../config/supabase';
 import { C } from '../config/constants';
+import { computeProfileStats } from '../utils/profileStats';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const HELP_CENTER_URL = 'À_REMPLACER_PAR_LE_LIEN_VERCEL';
 
-const PURPLE  = '#8B5CF6';
-const GREEN2  = '#27AE60';
-const AMBER   = '#F59E0B';
-
 const SCREEN = {
   title:        'Mon Profil',
   badgeLabel:   'Éco-responsable',
-  scoreLabel:   'Score anti-gaspillage',
   badgesTitle:  'BADGES',
   invite: {
     title:    'Inviter des amis',
-    subtitle: 'Partage Frigy et aide tes proches à économiser',
+    subtitle: 'Partage Frigy avec tes proches',
   },
   logout:       'Se déconnecter',
+  // N6-10 (CR-11/13) : message neutre. Aucun chiffre d'économie inventé (« 30 € »), aucune assertion
+  // causale (« je ne jette plus rien »), aucune promesse de résultat. Description factuelle de l'app.
   shareMessage:
-    `Hey ! Je voulais te parler de Frigy, l'app qui m'a changé la vie en cuisine.\n\nDepuis que je l'utilise, je ne jette presque plus rien — l'app me rappelle ce qui va bientôt périmer, me suggère des recettes avec ce que j'ai déjà, et même scanne mes tickets de caisse pour tout enregistrer automatiquement.\n\nEn moyenne, ça économise plus de 30 € par mois rien qu'en évitant le gaspillage.\n\nTélécharge-la, c'est gratuit :\nhttps://apps.apple.com/app/frigy/id6768930083`,
+    `Je teste Frigy, une app qui aide à mieux utiliser ce qu'on a déjà à la maison : elle garde une trace de tes produits, te rappelle les dates limites et suggère des recettes.\n\nTélécharge-la, c'est gratuit :\nhttps://apps.apple.com/app/frigy/id6768930083`,
 };
 
 const STAT_COLORS = {
   green:  { text: C.green, bg: `${C.green}15` },
   red:    { text: C.red,   bg: `${C.red}12`   },
-  purple: { text: PURPLE,  bg: `${PURPLE}12`  },
-  green2: { text: GREEN2,  bg: `${GREEN2}12`  },
 };
 
-
-const FRENCH_AVG_WASTE = 0.20;
-
-function getWeekGrade(wasteRate) {
-  if (wasteRate < 0.05) return { letter: 'A', color: '#22C55E' };
-  if (wasteRate < 0.15) return { letter: 'B', color: '#84CC16' };
-  if (wasteRate < 0.25) return { letter: 'C', color: '#F59E0B' };
-  if (wasteRate < 0.40) return { letter: 'D', color: '#F97316' };
-  return { letter: 'E', color: '#EF4444' };
-}
-
-const NOTIF_OPTIONS = [
-  { id: 'pushEnabled',          label: 'Notifications push'                },
-  { id: 'expirationAlerts',     label: 'Alertes DLC proches'               },
-  { id: 'dayBeforeReminder',    label: 'Rappel produits J-1'               },
-  { id: 'recipeSuggestions',    label: 'Suggestions de recettes'           },
-  { id: 'weeklySavingsSummary', label: 'Résumé économies hebdomadaire'     },
-  { id: 'monthlyCo2Impact',     label: 'Impact CO₂ mensuel'                },
-];
-
-const MOCK_NOTIFS = {
-  pushEnabled: true,
-  expirationAlerts: true,
-  dayBeforeReminder: true,
-  recipeSuggestions: true,
-  weeklySavingsSummary: false,
-  monthlyCo2Impact: false,
-};
+// N6-10 (CR-13) : suppression totale du score/grade (getWeekGrade), de la moyenne nationale
+// (FRENCH_AVG_WASTE) et de la comparaison — aucune base de vérité, jamais réintroduire.
+// N6-10 (CR-21) : suppression du surface de préférences de notifications (NOTIF_OPTIONS/MOCK_NOTIFS/
+// NotificationsModal). Les toggles ne pilotaient aucune capacité réelle (voir App.js). Les prefs DB
+// existantes ne sont ni migrées ni supprimées ; seule l'UI mensongère est retirée.
 
 const PERSONAL_FIELDS = [
   { id: 'firstName', label: 'Prénom',     placeholder: 'Prénom',      keyboardType: 'default',       autoCapitalize: 'words', editable: true  },
@@ -188,73 +161,13 @@ function PersonalInfoModal({ visible, onClose, initialData, onSave }) {
   );
 }
 
-// ─── NotificationsModal ───────────────────────────────────────────────────────
-
-function NotificationsModal({ visible, onClose, user, onPrefsChange }) {
-  const [notifs, setNotifs] = useState(MOCK_NOTIFS);
-
-  useEffect(() => {
-    if (!visible || !user?.id) return;
-    supabase.from('profiles').select('notification_prefs').eq('id', user.id).single()
-      .then(({ data }) => {
-        if (data?.notification_prefs) setNotifs({ ...MOCK_NOTIFS, ...data.notification_prefs });
-      });
-  }, [visible, user?.id]);
-
-  const handleToggle = async (id) => {
-    const updated = { ...notifs, [id]: !notifs[id] };
-    setNotifs(updated);
-    if (user?.id) {
-      await supabase.from('profiles').update({ notification_prefs: updated }).eq('id', user.id);
-      onPrefsChange?.(updated);
-    }
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 }}>
-            <X size={18} color={C.t2} strokeWidth={2} />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 17, fontWeight: '700', color: C.t1 }}>Notifications</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
-          <View style={{ backgroundColor: C.card, borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
-            {NOTIF_OPTIONS.map((opt, i) => (
-              <View
-                key={opt.id}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: i < NOTIF_OPTIONS.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
-                <Text style={{ fontSize: 15, fontWeight: '500', color: C.t1, flex: 1 }}>{opt.label}</Text>
-                <Switch
-                  value={notifs[opt.id]}
-                  onValueChange={() => handleToggle(opt.id)}
-                  trackColor={{ false: C.border, true: `${C.green}80` }}
-                  thumbColor={notifs[opt.id] ? C.green : '#f4f3f4'}
-                  ios_backgroundColor={C.border}
-                />
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onPrefsChange, onClearFridge, onClearAll }) {
+export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onClearFridge, onClearAll }) {
   const [stats,            setStats]            = useState(null);
   const [localName,        setLocalName]        = useState(profileName || '');
   const [avatarUri,        setAvatarUri]        = useState(null);
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
-  const [showNotifications,setShowNotifications]= useState(false);
 
   const initial     = localName ? localName[0].toUpperCase() : 'L';
   const memberSince = user?.created_at
@@ -279,44 +192,25 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
 
   useEffect(() => {
     if (!familyId) return;
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-    weekStart.setHours(0, 0, 0, 0);
-    Promise.all([
-      supabase.from('items').select('price, wasted').eq('family_id', familyId).eq('consumed', true),
-      supabase.from('items').select('wasted').eq('family_id', familyId).eq('consumed', true).gte('updated_at', weekStart.toISOString()),
-    ]).then(([{ data: allData }, { data: weekData }]) => {
-      if (!allData) return;
-      const saved         = allData.filter(i => !i.wasted);
-      const wasted        = allData.filter(i => i.wasted);
-      const savedCount    = saved.length;
-      const wastedCount   = wasted.length;
-      const savings       = saved.reduce((sum, i) => sum + (i.price || 2.5), 0);
-      const co2           = savedCount * 0.75;
-      const weekSaved     = weekData?.filter(i => !i.wasted).length ?? 0;
-      const weekWasted    = weekData?.filter(i => i.wasted).length  ?? 0;
-      const weekTotal     = weekSaved + weekWasted;
-      const weekWasteRate = weekTotal > 0 ? weekWasted / weekTotal : 0;
-      setStats({ savedCount, wastedCount, savings, co2, weekSaved, weekWasted, weekWasteRate });
-    });
+    // N6-10 (2.6) : on ne lit QUE `wasted` (pas `price` → aucun vecteur monétaire), et AUCUNE fenêtre
+    // temporelle. `items.updated_at` est un timestamp technique de dernière modification (trigger prod
+    // trg_items_updated_at → now()), PAS l'instant de l'événement consommation/gaspillage → il ne peut
+    // pas fonder une revendication « cette semaine ». Seuls des comptes GLOBAUX de faits enregistrés.
+    supabase.from('items').select('wasted').eq('family_id', familyId).eq('consumed', true)
+      .then(({ data: allData }) => {
+        if (!allData) return;
+        setStats(computeProfileStats(allData));
+      });
   }, [familyId]);
 
-  const savedCount    = stats?.savedCount    ?? 0;
-  const wastedCount   = stats?.wastedCount   ?? 0;
-  const savings       = stats?.savings       ?? 0;
-  const co2           = stats?.co2           ?? 0;
-  const weekSaved     = stats?.weekSaved     ?? 0;
-  const weekWasted    = stats?.weekWasted    ?? 0;
-  const weekWasteRate = stats?.weekWasteRate ?? 0;
-  const weekTotal     = weekSaved + weekWasted;
-  const weekGrade     = weekTotal > 0 ? getWeekGrade(weekWasteRate) : { letter: '—', color: C.t3 };
-  const comparisonPct = Math.round((FRENCH_AVG_WASTE - weekWasteRate) * 100);
+  // N6-10 (CR-11/12/13/14) : uniquement des faits ENREGISTRÉS au niveau foyer, GLOBAUX (aucune fenêtre
+  // temporelle). AUCUN argent, CO₂, score/grade, comparaison. Compte = lignes (cohortes), pas unités.
+  const recordedCount      = stats?.recordedConsumptions ?? 0;
+  const declaredWasteCount = stats?.declaredWaste        ?? 0;
 
   const statsData = [
-    { id: 'saved',   label: 'Produits sauvés',    value: savedCount,               Icon: Leaf,  colorKey: 'green',  info: 'Produits consommés avant expiration.'             },
-    { id: 'wasted',  label: 'Gaspillés',           value: wastedCount,              Icon: Trash2,colorKey: 'red',    info: 'Produits déclarés comme jetés.'                   },
-    { id: 'savings', label: 'Économies estimées',  value: `${savings.toFixed(0)} €`,Icon: Coins, colorKey: 'purple', info: 'Calculées à partir des prix enregistrés au scan.' },
-    { id: 'co2',     label: 'CO₂ évité',           value: `${co2.toFixed(1)} kg`,   Icon: Leaf,  colorKey: 'green2', info: 'Calculées à partir de moyennes alimentaires.'     },
+    { id: 'recorded', label: 'Consommations enregistrées', value: recordedCount,      Icon: Leaf,   colorKey: 'green', info: 'Produits marqués consommés et non déclarés gaspillés (au niveau du foyer). Ce n\'est ni une preuve de sauvetage ni une quantité physique.' },
+    { id: 'waste',    label: 'Gaspillages déclarés',        value: declaredWasteCount, Icon: Trash2, colorKey: 'red',   info: 'Produits que tu as déclarés jetés.' },
   ];
 
   const handlePickAvatar = async () => {
@@ -410,7 +304,7 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
 
   const confirmClear = (withHistory) => {
     const msg = withHistory
-      ? 'Tous tes produits ET tout ton historique (économies, CO₂, produits sauvés/gaspillés) seront définitivement effacés.'
+      ? 'Tous tes produits ET tout ton historique (consommations et gaspillages enregistrés) seront définitivement effacés.'
       : 'Tous tes produits actuels seront effacés. Ton historique et tes stats restent intacts.';
     Alert.alert('Dernière confirmation', msg, [
       { text: 'Annuler', style: 'cancel' },
@@ -441,14 +335,20 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
     );
   };
 
+  // N6-10 (2.6, CR-20) : LIBELLÉ = EFFET RÉEL. L'action supprime le CONTENU (items, shopping_items,
+  // saved_recipes, scan_history, ligne profiles) puis déconnecte. Elle NE supprime PAS : la photo de
+  // profil (objet Storage `avatars`), l'identité Auth, la ligne `families`, le client RevenueCat, ni
+  // certaines données techniques locales (AsyncStorage). Donc PAS de « mes données Frigy »/« toutes mes
+  // données » (trop large) ni « supprimer mon compte » (faux). Le libellé se borne au set réellement
+  // effacé ; la confirmation énumère l'effet ET les exclusions (photo, identifiant, local).
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Supprimer mon compte',
-      'Cette action est irréversible. Toutes tes données (produits, recettes, profil) seront définitivement supprimées.',
+      'Effacer mes produits, listes et historique ?',
+      'Cette action supprimera tes produits, ta liste de courses, tes recettes enregistrées, ton historique et les informations de ton profil, puis te déconnectera.\n\nTa photo de profil et ton identifiant de connexion ne sont pas supprimés.\n\nCertaines données techniques locales peuvent également rester sur cet appareil.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Supprimer définitivement',
+          text: 'Effacer',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -463,7 +363,8 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
               }
               await supabase.auth.signOut();
             } catch (e) {
-              Alert.alert('Erreur', 'Impossible de supprimer le compte. Contacte-nous à support@frigy.app');
+              // Échec partiel possible : on reste authentifié (pas de signOut) et on le dit honnêtement.
+              Alert.alert('Suppression incomplète', 'La suppression n\'a pas pu être terminée. Certaines données peuvent déjà avoir été supprimées. Réessaie, ou contacte-nous à support@frigy.app');
             }
           },
         },
@@ -547,50 +448,14 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         </View>
       </View>
 
-      {/* ── Score Card ── */}
-      <TouchableOpacity
-        activeOpacity={0.88}
-        onPress={() => Alert.alert('Score hebdomadaire 🌱', 'Ton score se remet à zéro chaque lundi.\n\nNote basée sur ton taux de gaspillage :\nA : < 5%  ·  B : 5–15%  ·  C : 15–25%\nD : 25–40%  ·  E : > 40%\n\nLa moyenne française est ~20%.')}
-        style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: C.card, borderRadius: 28, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <Text style={{ fontSize: 13, color: C.t3 }}>{SCREEN.scoreLabel}</Text>
-              <Info size={13} color={C.t4} strokeWidth={1.5} />
-            </View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: C.t3, letterSpacing: 0.8, marginBottom: 14 }}>CETTE SEMAINE</Text>
-            {weekTotal > 0 ? (
-              comparisonPct > 0 ? (
-                <View style={{ backgroundColor: `${C.green}15`, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: C.green }}>🇫🇷 {comparisonPct}% mieux que la moyenne française</Text>
-                </View>
-              ) : comparisonPct < 0 ? (
-                <View style={{ backgroundColor: '#F9731615', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#F97316' }}>🇫🇷 {Math.abs(comparisonPct)}% au-dessus de la moyenne française</Text>
-                </View>
-              ) : (
-                <View style={{ backgroundColor: `${C.t3}15`, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: C.t3 }}>🇫🇷 Dans la moyenne française</Text>
-                </View>
-              )
-            ) : (
-              <View style={{ backgroundColor: `${C.green}12`, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: C.green }}>Scanne tes premiers produits 🌱</Text>
-              </View>
-            )}
-            <Text style={{ fontSize: 12, color: C.t3 }}>
-              {weekSaved} sauvé{weekSaved !== 1 ? 's' : ''} · {weekWasted} gaspillé{weekWasted !== 1 ? 's' : ''} cette semaine
-            </Text>
-          </View>
-          <View style={{ width: 86, height: 86, borderRadius: 43, backgroundColor: `${weekGrade.color}18`, alignItems: 'center', justifyContent: 'center', marginLeft: 16, borderWidth: 3, borderColor: `${weekGrade.color}30` }}>
-            <Text style={{ fontSize: weekTotal > 0 ? 46 : 28, fontWeight: '900', color: weekGrade.color, letterSpacing: -2 }}>{weekGrade.letter}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+      {/* N6-10 (2.6) : carte hebdomadaire SUPPRIMÉE. `items.updated_at` (timestamp technique de
+          dernière modif, trigger prod) n'est pas l'instant de l'événement → aucune revendication
+          « cette semaine » n'est fondée. Aucun champ événementiel n'est inventé ; les comptes GLOBAUX
+          véridiques ci-dessous suffisent. Silence préféré à une duplication scopée non prouvée. */}
 
       {/* ── Stats Grid ── */}
       <View style={{ marginHorizontal: 16, marginBottom: 12, gap: 10 }}>
-        {[statsData.slice(0, 2), statsData.slice(2, 4)].map((row, ri) => (
+        {[statsData].map((row, ri) => (
           <View key={ri} style={{ flexDirection: 'row', gap: 10 }}>
             {row.map(stat => {
               const col = STAT_COLORS[stat.colorKey];
@@ -618,7 +483,6 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
       <View style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: C.card, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10 }}>
         {[
           { id: 'personal', title: 'Informations personnelles', Icon: User,       onPress: () => setShowPersonalInfo(true)  },
-          { id: 'notifs',   title: 'Notifications',             Icon: Bell,       onPress: () => setShowNotifications(true) },
           { id: 'help',     title: "Aide & Centre d'aide",      Icon: HelpCircle, onPress: handleOpenHelpCenter             },
           { id: 'review',   title: 'Laisser un avis ⭐',        Icon: Star,       onPress: handleLeaveReview                },
         ].map((item, i, arr) => (
@@ -675,7 +539,7 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
       <TouchableOpacity
         onPress={handleDeleteAccount}
         style={{ marginHorizontal: 16, marginBottom: 16, padding: 12, alignItems: 'center' }}>
-        <Text style={{ color: C.t3, fontSize: 13 }}>Supprimer mon compte</Text>
+        <Text style={{ color: C.t3, fontSize: 13 }}>Effacer mes produits, listes et historique</Text>
       </TouchableOpacity>
 
       {/* ── Sub-screens ── */}
@@ -690,12 +554,6 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
           avatarUri,
         }}
         onSave={handleSavePersonalInfo}
-      />
-      <NotificationsModal
-        visible={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        user={user}
-        onPrefsChange={onPrefsChange}
       />
     </ScrollView>
   );

@@ -299,43 +299,10 @@ function App() {
       });
     }
 
-    // ── Récap hebdomadaire (lundi 9h) ────────────────────────────
-    if (prefs.weeklySavingsSummary) {
-      const nextMonday = new Date();
-      const daysUntil = (8 - nextMonday.getDay()) % 7 || 7;
-      nextMonday.setDate(nextMonday.getDate() + daysUntil);
-      nextMonday.setHours(9, 0, 0, 0);
-      if (nextMonday > now) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: '📊 Ton récap de la semaine',
-            body: 'Découvre tes économies et ce que tu as sauvé cette semaine !',
-            sound: true,
-            data: { screen: 'home' },
-          },
-          trigger: nextMonday,
-        });
-      }
-    }
-
-    // ── Impact CO₂ mensuel (1er du mois suivant 9h) ──────────────
-    if (prefs.monthlyCo2Impact) {
-      const nextFirst = new Date();
-      nextFirst.setDate(1);
-      nextFirst.setMonth(nextFirst.getMonth() + 1);
-      nextFirst.setHours(9, 0, 0, 0);
-      if (nextFirst > now) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: '🌍 Ton impact CO₂ du mois',
-            body: 'Vois combien de CO₂ tu as évité grâce à Frigy ce mois-ci !',
-            sound: true,
-            data: { screen: 'profile' },
-          },
-          trigger: nextFirst,
-        });
-      }
-    }
+    // N6-10 (CR-11/12/21) : les récaps « économies hebdo » et « impact CO₂ mensuel » ont été
+    // SUPPRIMÉS. Ils promettaient des métriques fabriquées (aucune économie causale ni modèle CO₂
+    // réels) et n'étaient adossés à aucune vérité. Seules subsistent les alertes temporelles ci-dessus,
+    // gouvernées par le gate de vérité N6-03 (non modifié). Silence = valide.
   };
 
   useEffect(() => {
