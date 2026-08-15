@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Image, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -19,6 +19,7 @@ import { passiveTemporalDays, amplifiedTemporalDays } from '../utils/temporalAut
 import { useStockTheme } from '../utils/stockTheme';
 import { DEV_PREVIEW_STOCK_ENABLED, DEV_PREVIEW_MODE, getDevPreviewItems, getVisualQAItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
 import { resolveFoodImage } from '../utils/foodLanguage';
+import { createConsumeCoordinator } from '../utils/consumptionOutcome';
 import { styles } from '../styles';
 import StorageScopeControl from '../components/StorageScopeControl';
 import InventoryProductRow from '../components/InventoryProductRow';
@@ -201,11 +202,35 @@ export default function FridgeScreen({
     await supabase.from('items').update(updates).eq('id', selectedItem.id);
   };
 
+  // N6-12 (CR-10 + Waste Write Authority) : PERSISTANCE D'ABORD. Un résultat consommé/gaspillé n'est
+  // représenté (retrait du stock actif + fermeture modale + analytics) qu'APRÈS une preuve canonique
+  // exacte (erreur nulle + 1 ligne dont l'id correspond ; `.select('id')`). Échec/zéro-ligne → l'item
+  // RESTE, la modale reste réessayable, AUCUN event analytics. Verrou synchrone : un 2e tap pendant la
+  // requête ne déclenche PAS de 2e mutation. Même autorité pour « J'ai mangé ça » et « Gaspillé ».
+  const consumeCoordRef = useRef(null);
+  if (!consumeCoordRef.current) {
+    consumeCoordRef.current = createConsumeCoordinator({
+      mutate: (item, wasted) =>
+        supabase.from('items').update({ consumed: true, wasted }).eq('id', item.id).select('id'),
+    });
+  }
+  const [consumeBusy, setConsumeBusy] = useState(false);
+
   const consumeItem = async (item, wasted = false) => {
+    const coord = consumeCoordRef.current;
+    if (coord.isBusy()) return; // garde synchrone anti double-action
+    setConsumeBusy(true);
     Haptics.impactAsync(wasted ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
+    const r = await coord.run(item, wasted);
+    setConsumeBusy(false);
+    if (r.skipped) return;
+    if (!r.ok) {
+      Alert.alert('Impossible d\'enregistrer cette action', 'Réessaie.');
+      return; // item conservé, modale ouverte, aucun analytics
+    }
+    // Succès canonique prouvé → alors seulement représenter l'issue.
     updateItems(p => p.filter(x => x.id !== item.id));
     setSelectedItem(null);
-    await supabase.from('items').update({ consumed: true, wasted }).eq('id', item.id);
     posthog.capture(wasted ? 'product_wasted' : 'product_consumed', {
       name: item.name, category: item.category, days_left: item.days,
       location: item.location, price: item.price || null,
@@ -385,13 +410,13 @@ export default function FridgeScreen({
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-                      <TouchableOpacity onPress={() => consumeItem(item, false)}
-                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: `${C.green}18` }}>
+                      <TouchableOpacity onPress={() => consumeItem(item, false)} disabled={consumeBusy}
+                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: `${C.green}18`, opacity: consumeBusy ? 0.5 : 1 }}>
                         <Utensils size={26} color={C.green} strokeWidth={2} style={{ marginBottom: 6 }} />
                         <Text style={{ fontSize: 14, fontWeight: '700', color: C.green }}>J'ai mangé ça</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => consumeItem(item, true)}
-                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: '#FF3B3018' }}>
+                      <TouchableOpacity onPress={() => consumeItem(item, true)} disabled={consumeBusy}
+                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: '#FF3B3018', opacity: consumeBusy ? 0.5 : 1 }}>
                         <Trash2 size={26} color={C.red} strokeWidth={2} style={{ marginBottom: 6 }} />
                         <Text style={{ fontSize: 14, fontWeight: '700', color: C.red }}>Gaspillé</Text>
                       </TouchableOpacity>

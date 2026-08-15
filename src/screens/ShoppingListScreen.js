@@ -14,7 +14,6 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
   const [input, setInput]         = useState('');
   const [loading, setLoading]     = useState(true);
   const [kbHeight, setKbHeight]   = useState(0);
-  const [wastedInsights, setWastedInsights] = useState([]);
   const inputRef                  = useRef(null);
   const insets                    = useSafeAreaInsets();
 
@@ -39,29 +38,10 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
         setLoading(false);
       });
 
-    // Analyse de l'historique de gaspillage (60 derniers jours)
-    const since = new Date();
-    since.setDate(since.getDate() - 60);
-    supabase
-      .from('items')
-      .select('name, emoji, category')
-      .eq('family_id', fid)
-      .eq('wasted', true)
-      .gte('updated_at', since.toISOString())
-      .then(({ data }) => {
-        if (!data?.length) return;
-        const counts = {};
-        data.forEach(i => {
-          const key = i.name.toLowerCase().trim();
-          if (!counts[key]) counts[key] = { name: i.name, emoji: i.emoji || '🛒', count: 0 };
-          counts[key].count++;
-        });
-        const insights = Object.values(counts)
-          .filter(i => i.count >= 2)
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 4);
-        setWastedInsights(insights);
-      });
+    // N6-12 (CR-10) : AUCUNE analyse de gaspillage ici. Un compte brut de lignes `wasted` (sans
+    // dénominateur ni instant d'événement réel — `updated_at` = timestamp technique) ne prouve aucune
+    // « fréquence » et un signal NÉGATIF n'autorise aucune reco d'achat. Le gaspillage ne pilote pas la
+    // liste de courses. Le seul écrivain d'intention d'achat reste `addItem` (saisie explicite). Silence.
   }, [fid]);
 
   const addItem = async () => {
@@ -143,40 +123,8 @@ export default function ShoppingListScreen({ onClose, familyId, user }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
 
-          {/* ── Produits à surveiller ── */}
-          {wastedInsights.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B', letterSpacing: 0.8 }}>
-                  ⚠️ TU GASPILLES SOUVENT
-                </Text>
-              </View>
-              <View style={{ backgroundColor: '#FFFBEB', borderRadius: 18, padding: 14,
-                borderWidth: 1.5, borderColor: '#FDE68A' }}>
-                <Text style={{ fontSize: 12, color: '#92610A', marginBottom: 12, lineHeight: 17 }}>
-                  Ces produits reviennent souvent dans tes déchets. Pense à en acheter moins ou à les consommer plus vite.
-                </Text>
-                {wastedInsights.map((p, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center',
-                    paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#FDE68A', gap: 10 }}>
-                    <Text style={{ fontSize: 24, width: 32, textAlign: 'center' }}>{p.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#78350F' }}>{p.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#92610A', marginTop: 1 }}>
-                        Gaspillé {p.count} fois ces 2 derniers mois
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => { setInput(p.name); inputRef.current?.focus(); }}
-                      style={{ paddingHorizontal: 12, paddingVertical: 6,
-                        backgroundColor: '#F59E0B', borderRadius: 10 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>+ Liste</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {/* N6-12 (CR-10) : panneau « TU GASPILLES SOUVENT » + « + Liste » SUPPRIMÉ. Aucune reco d'achat
+              dérivée d'un signal de gaspillage ; aucune revendication de fréquence non fondée. */}
 
           {items.length === 0 && !loading && (
             <View style={{ alignItems: 'center', paddingVertical: 64 }}>
