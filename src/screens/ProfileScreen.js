@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../config/supabase';
 import { C } from '../config/constants';
 import { computeProfileStats } from '../utils/profileStats';
+import { isProStatus, isKnownFree } from '../utils/entitlement';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ function PersonalInfoModal({ visible, onClose, initialData, onSave }) {
 
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ profileName, user, familyId, isPro, onPaywall, onNameChange, onClearFridge, onClearAll }) {
+export default function ProfileScreen({ profileName, user, familyId, entitlement, onPaywall, onNameChange, onClearFridge, onClearAll }) {
   const [stats,            setStats]            = useState(null);
   const [localName,        setLocalName]        = useState(profileName || '');
   const [avatarUri,        setAvatarUri]        = useState(null);
@@ -407,15 +408,17 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ fontSize: 22, fontWeight: '800', color: C.t1, letterSpacing: -0.5 }}>{localName || 'Lucas'}</Text>
           <Text style={{ fontSize: 13, color: C.t3 }}>Membre depuis {memberSince}</Text>
-          {isPro ? (
+          {/* N6-11 : badge Pro si KNOWN PRO ; upsell UNIQUEMENT si KNOWN FREE ; UNKNOWN/ERROR → silence
+              (ne jamais afficher « Passer à Pro » à un payant dont l'abonnement n'est pas encore établi). */}
+          {isProStatus(entitlement) ? (
             <View style={{ marginTop: 5, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#F5C518', borderRadius: 100, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#78350F' }}>✦ Pro</Text>
             </View>
-          ) : (
+          ) : isKnownFree(entitlement) ? (
             <TouchableOpacity onPress={onPaywall} style={{ marginTop: 5, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: `${C.green}15`, borderRadius: 100, alignSelf: 'flex-start' }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: C.green }}>Passer à Pro →</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: C.green }}>Découvrir Frigy Pro →</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         <ChevronRight size={18} color={C.t4} strokeWidth={2} />
       </TouchableOpacity>
@@ -499,8 +502,11 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
         ))}
       </View>
 
-      {/* ── Upgrade banner (only if free) ── */}
-      {!isPro && (
+      {/* ── Upgrade banner : KNOWN FREE seulement ── */}
+      {/* N6-11 : le Profil ne duplique AUCUNE métadonnée commerciale (ni prix, ni essai — source unique
+          = Paywall autoritaire). Route neutre « Découvrir Frigy Pro » ouvrant le Paywall. UNKNOWN/ERROR/
+          PRO → pas de bannière. */}
+      {isKnownFree(entitlement) && (
         <TouchableOpacity
           onPress={onPaywall}
           style={{ marginHorizontal: 16, marginBottom: 12, borderRadius: 24, overflow: 'hidden',
@@ -511,8 +517,8 @@ export default function ProfileScreen({ profileName, user, familyId, isPro, onPa
               <Crown size={22} color="#F5C518" strokeWidth={1.8} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: -0.3 }}>Passer à Frigy Pro</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>Essai gratuit 7 jours · 2,99€/mois</Text>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: -0.3 }}>Découvrir Frigy Pro</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>Scan ticket, photo des courses et plus</Text>
             </View>
             <ChevronRight size={18} color="rgba(255,255,255,0.5)" strokeWidth={2} />
           </View>

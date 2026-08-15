@@ -13,6 +13,7 @@ import { posthog } from '../config/posthog';
 import { EDGE_FN_URL, RECEIPT_FN_URL } from '../config/urls';
 import { C, LOC_ITEMS, urgBg } from '../config/constants';
 import { decideAddItems, CAP_DECISION } from '../utils/capEnforcement';
+import { ENTITLEMENT, isProStatus, isKnownFree, decideFeatureAccess, FEATURE_ACCESS } from '../utils/entitlement';
 import { parseDlc, formatDlcInput, normalizeDlc, suggestLocation, estimateDays } from '../utils/product';
 import { searchSpoonacular } from '../api/spoonacular';
 import { searchOpenFoodFacts, searchImageByName } from '../api/openfoodfacts';
@@ -69,14 +70,27 @@ const PHOTO_METHODS_CONFIG = [
 
 const RECEIPT_FREE_KEY = 'frigy_receipt_free_used';
 
-export default function ScanScreen({ onClose, setItems, items, user, familyId, isPro, onPaywall, countReady }) {
-  // N6-09 (CR-18) : décision de création centralisée + mapping raison→feedback (une seule source
-  // pour les 4 writers). Renvoie true si BLOQUÉ (aucune écriture) : compte inconnu → Alert neutre de
-  // chargement (JAMAIS le paywall) ; limite atteinte → paywall existant. Compte = `items` réel.
+export default function ScanScreen({ onClose, setItems, items, user, familyId, entitlement, onPaywall, onRetryEntitlement, countReady }) {
+  const isPro = isProStatus(entitlement);
+  // N6-11 : feedback neutre quand l'autorité d'entitlement n'est pas établie (UNKNOWN → vérification ;
+  // ERROR → réessai via refresh). JAMAIS « Free », JAMAIS paywall sous incertitude.
+  const entitlementWait = () => {
+    if (entitlement === ENTITLEMENT.ERROR) {
+      Alert.alert('Impossible de vérifier ton abonnement', 'Vérifie ta connexion et réessaie.',
+        [{ text: 'Annuler', style: 'cancel' }, { text: 'Réessayer', onPress: () => onRetryEntitlement?.() }]);
+    } else {
+      Alert.alert('Vérification de ton abonnement…', 'Réessaie dans un instant.');
+    }
+  };
+  // N6-09 (CR-18) + N6-11 (CR-15/16/17) : décision de création centralisée + mapping raison→feedback
+  // (une seule source pour les 4 writers). Renvoie true si BLOQUÉ (aucune écriture) : compte inconnu →
+  // chargement ; entitlement non établi au cap → vérification NEUTRE (jamais paywall) ; limite Free →
+  // paywall. Compte = `items` réel.
   const capBlocked = (addCount) => {
-    const dec = decideAddItems({ isPro, countReady, activeCount: items?.length ?? 0, addCount });
+    const dec = decideAddItems({ entitlement, countReady, activeCount: items?.length ?? 0, addCount });
     if (dec.allowed) return false;
     if (dec.reason === CAP_DECISION.DENY_COUNT_UNAVAILABLE) Alert.alert('Stock en cours de chargement', 'Réessaie dans un instant.');
+    else if (dec.reason === CAP_DECISION.DENY_ENTITLEMENT_UNAVAILABLE) entitlementWait();
     else onPaywall?.();
     return true;
   };
@@ -334,7 +348,9 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     }))]);
     posthog.capture('scan_completed', { method: 'receipt', products_count: rows.length, store: receiptData?.store || null, total: receiptData?.total || null });
     rows.forEach(r => posthog.capture('product_added', { method: 'receipt', name: r.name, brand: r.brand || null, category: r.category, location: r.location, has_dlc: r.dlc !== '—', price: r.price || null, quantity: r.quantity || 1 }));
-    const alertMsg = !isPro && !receiptFreeUsed
+    // N6-11 : upsell « Passe à Pro » UNIQUEMENT si KNOWN FREE (jamais sous UNKNOWN/ERROR : ne pas
+    // impliquer un palier Free non établi).
+    const alertMsg = isKnownFree(entitlement) && !receiptFreeUsed
       ? `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} avec leurs prix réels.\n\nPasse à Frigy Pro pour scanner tous tes tickets sans limite 🎁`
       : `${rows.length} produit${rows.length > 1 ? 's' : ''} ajouté${rows.length > 1 ? 's' : ''} au stock.`;
     Alert.alert('✅ Ajouté !', alertMsg, [{ text: 'Super !', style: 'default' }]);
@@ -557,16 +573,23 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   };
 
   // ── CHOICE ──────────────────────────────────────────────────────────────────
-  const receiptFree = !isPro && !receiptFreeUsed; // scan gratuit disponible
+  // N6-11 : le 1er scan offert est accessible à TOUS les paliers (Free ET Pro), donc UNKNOWN/ERROR aussi
+  // (l'entitlement n'importe pas tant que l'offert reste disponible). Le palier ne compte QU'après l'usage
+  // de l'offert. Badge : jamais d'assertion de palier fausse sous UNKNOWN/ERROR (§16).
+  const receiptAllowanceLeft = !receiptFreeUsed;
+  const receiptBadge = isPro ? 'ILLIMITÉ'
+    : receiptAllowanceLeft ? '1 GRATUIT'
+    : isKnownFree(entitlement) ? 'PRO'
+    : null; // allowance utilisée + palier inconnu → pas d'assertion
   const ADD_METHODS = [
     {
       id: 'receipt', Icon: FileText,
       title: 'Scan ticket de caisse',
-      badge: isPro ? 'ILLIMITÉ' : receiptFree ? '1 GRATUIT' : 'PRO',
+      badge: receiptBadge,
       description: "Prends en photo ton ticket de caisse pour extraire automatiquement tes produits et leurs prix réels.",
-      feature: isPro ? 'Produits + prix extraits' : receiptFree ? '🎁 Ton 1er scan offert' : '✦ Fonctionnalité Pro',
+      feature: isPro ? 'Produits + prix extraits' : receiptAllowanceLeft ? '🎁 Ton 1er scan offert' : '✦ Fonctionnalité Pro',
       color: '#8B5CF6', iconBg: '#F3EFFE', badgeBg: '#EDE9FE', featureBg: '#F3EFFE',
-      pro: !isPro && !receiptFree,
+      pro: isKnownFree(entitlement) && !receiptAllowanceLeft,
     },
     {
       id: 'barcode', Icon: Scan,
@@ -600,10 +623,22 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   const handleMethodPress = (id) => {
     posthog.capture('scan_started', { method: id });
     if (id === 'barcode') { if (!permission?.granted) requestPermission(); setMode('scanner'); }
-    else if (id === 'photo') { if (!isPro) { onPaywall?.(); return; } setMode('photo'); }
+    else if (id === 'photo') {
+      // N6-11 : Photo = vraie différence de palier. PRO→ouvre ; FREE→paywall ; UNKNOWN/ERROR→neutre
+      // (jamais déverrouiller sous incertitude, jamais appeler UNKNOWN « Free »).
+      const acc = decideFeatureAccess(entitlement);
+      if (acc === FEATURE_ACCESS.ALLOW) setMode('photo');
+      else if (acc === FEATURE_ACCESS.PAYWALL) onPaywall?.();
+      else entitlementWait();
+    }
     else if (id === 'receipt') {
-      if (isPro || receiptFree) { setMode('receipt'); }
-      else { onPaywall?.(); }
+      // Offert encore disponible → accessible à tous les paliers (entitlement indifférent). Sinon le
+      // palier compte : PRO→ouvre ; FREE→paywall ; UNKNOWN/ERROR→neutre.
+      if (receiptAllowanceLeft) { setMode('receipt'); return; }
+      const acc = decideFeatureAccess(entitlement);
+      if (acc === FEATURE_ACCESS.ALLOW) setMode('receipt');
+      else if (acc === FEATURE_ACCESS.PAYWALL) onPaywall?.();
+      else entitlementWait();
     }
     // N6-08 (CR-19) : saisie manuelle DIRECTE — préremplit un résultat « Manuel » et ouvre la
     // fiche (nom seul), sans caméra ni lookup. `manualDirect` neutralise la copie « non trouvé ».
@@ -652,9 +687,11 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
                     <Text style={{ fontSize: 18, fontWeight: '800', color: C.t1 }}>{m.title}</Text>
-                    <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: m.badgeBg, borderRadius: 999 }}>
-                      <Text style={{ fontSize: 9, fontWeight: '800', color: m.color, letterSpacing: 0.5 }}>{m.badge}</Text>
-                    </View>
+                    {m.badge ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: m.badgeBg, borderRadius: 999 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: m.color, letterSpacing: 0.5 }}>{m.badge}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <ChevronRight size={18} color={m.color} strokeWidth={2.5} style={{ marginLeft: 4 }} />
                 </View>

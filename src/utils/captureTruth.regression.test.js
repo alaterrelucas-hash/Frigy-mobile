@@ -45,7 +45,9 @@ present('MAN-T01 chemin manuel présent (source Manuel)', scan, "source === 'Man
 present('MAN-T03 nom seul suffit (fallback nom)', scan, "manualName.trim() || 'Produit'");
 present('MAN-T05 saisie manuelle du nom', scan, 'setManualName');
 // L'entrée barcode n'impose pas de gate premium (photo/receipt oui) → base gratuite.
-present('MAN-T02 photo garde son gate premium (base reste séparée)', scan, "if (!isPro) { onPaywall?.(); return; }");
+// N6-11 : le gate photo passe désormais par decideFeatureAccess (PRO→ouvre, FREE→paywall, UNKNOWN/
+// ERROR→neutre) ; la vérité « photo reste premium, base séparée » est PRÉSERVÉE.
+present('MAN-T02 photo garde son gate premium (base reste séparée)', scan, "if (acc === FEATURE_ACCESS.ALLOW) setMode('photo');");
 
 // ── HOME « JE L'AI » : présence sans date inventée ──
 ok('HAVE-T04 Home Je l\'ai n\'invente pas de date (dlc « — »)', app.includes("dlc: '—'"));

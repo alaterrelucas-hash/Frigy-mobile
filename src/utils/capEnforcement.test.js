@@ -53,7 +53,7 @@ const scan = fs.readFileSync(path.join(__dirname, '../screens/ScanScreen.js'), '
 const app = fs.readFileSync(path.join(__dirname, '../../App.js'), 'utf8');
 ok('WRITER addProduct passe par capBlocked', scan.includes('if (capBlocked(1)) return;'));
 ok('WRITER receipt + photo passent par capBlocked(toSave.length) (2 writers)', (scan.match(/if \(capBlocked\(toSave\.length\)\) return;/g) || []).length >= 2);
-ok('WRITER Home « Je l\'ai » (App.js) passe par decideAddItems', app.includes('decideAddItems({ isPro, countReady'));
+ok('WRITER Home « Je l\'ai » (App.js) passe par decideAddItems', app.includes('decideAddItems({ entitlement, countReady'));
 ok('COVER aucune logique cap indépendante (>= FREE_ITEMS_LIMIT) ne survit', !scan.includes('>= FREE_ITEMS_LIMIT') && !app.includes('>= FREE_ITEMS_LIMIT'));
 
 // Receipt : la décision (capBlocked) est AVANT `.insert(rows)` ET avant `setReceiptSaving(true)` →
@@ -106,7 +106,31 @@ ok('FEEDBACK count-unavailable NE mène PAS au paywall (mapping raison distinct)
   scan.includes('CAP_DECISION.DENY_COUNT_UNAVAILABLE') && scan.includes('else onPaywall?.();'));
 ok('WRITER-2.6 receipt via capBlocked(toSave.length)', scan.includes('if (capBlocked(toSave.length)) return;'));
 ok('WRITER-2.6 addProduct via capBlocked(1)', scan.includes('if (capBlocked(1)) return;'));
-ok('WRITER-2.6 handleConfirmHave via decideAddItems + countReady', app.includes('decideAddItems({ isPro, countReady, activeCount: items?.length ?? 0, addCount: 1 })'));
+ok('WRITER-2.6 handleConfirmHave via decideAddItems + countReady', app.includes('decideAddItems({ entitlement, countReady, activeCount: items?.length ?? 0, addCount: 1 })'));
+
+// ── N6-11 (CR-15/16/17) : autorité d'entitlement requise UNIQUEMENT au dépassement du cap ──
+// Sous la limite, Free ET Pro autoriseraient → ALLOW même UNKNOWN/ERROR (Free Core préservé).
+ok('N6-11 UNKNOWN + count 5 + add1 → ALLOW (palier indifférent sous la limite)', dec({ entitlement: 'unknown', countReady: true, activeCount: 5, addCount: 1 }).allowed === true);
+ok('N6-11 ERROR + 19 + add1 → ALLOW (=20, palier indifférent)', dec({ entitlement: 'error', countReady: true, activeCount: 19, addCount: 1 }).allowed === true);
+ok('N6-11 FREE + 19 + add1 → ALLOW', dec({ entitlement: 'free', countReady: true, activeCount: 19, addCount: 1 }).allowed === true);
+// Au dépassement, le palier fait la différence : FREE → paywall ; UNKNOWN/ERROR → neutre ; PRO → allow.
+ok('N6-11 UNKNOWN + 20 + add1 → DENY_ENTITLEMENT_UNAVAILABLE (neutre, jamais paywall)', dec({ entitlement: 'unknown', countReady: true, activeCount: 20, addCount: 1 }).reason === R.DENY_ENTITLEMENT_UNAVAILABLE);
+ok('N6-11 ERROR + 19 + receipt5 → DENY_ENTITLEMENT_UNAVAILABLE (lot atomique, 0 insert)', dec({ entitlement: 'error', countReady: true, activeCount: 19, addCount: 5 }).reason === R.DENY_ENTITLEMENT_UNAVAILABLE);
+ok('N6-11 FREE + 20 + add1 → DENY_CAP (paywall)', dec({ entitlement: 'free', countReady: true, activeCount: 20, addCount: 1 }).reason === R.DENY_CAP);
+ok('N6-11 PRO + 20 + add1 → ALLOW', dec({ entitlement: 'pro', countReady: true, activeCount: 20, addCount: 1 }).allowed === true);
+ok('N6-11 PRO + compte inconnu → ALLOW (jamais dépendant du compte)', dec({ entitlement: 'pro', countReady: false, activeCount: 0, addCount: 1 }).allowed === true);
+// DENY_ENTITLEMENT_UNAVAILABLE ≠ DENY_CAP : ne doit JAMAIS mener au paywall.
+ok('N6-11 UNKNOWN au cap n\'est PAS un refus limite (pas de paywall)', dec({ entitlement: 'unknown', countReady: true, activeCount: 20, addCount: 1 }).reason !== R.DENY_CAP);
+// Ordre : compte non prêt prime sur l'entitlement (les deux sont neutres, pas de paywall).
+ok('N6-11 UNKNOWN + compte non prêt → DENY_COUNT_UNAVAILABLE (compte prime)', dec({ entitlement: 'unknown', countReady: false, activeCount: 0, addCount: 1 }).reason === R.DENY_COUNT_UNAVAILABLE);
+// addCount invalide prime toujours (jamais de bypass), même entitlement inconnu.
+ok('N6-11 UNKNOWN + add0 → refus (invalide prime)', dec({ entitlement: 'unknown', countReady: true, activeCount: 5, addCount: 0 }).allowed === false);
+// Rétro-compat N6-09 : isPro booléen encore mappé (true→PRO, false→FREE).
+ok('N6-11 rétro-compat isPro:false = FREE (20+1 → DENY_CAP)', dec({ isPro: false, countReady: true, activeCount: 20, addCount: 1 }).reason === R.DENY_CAP);
+ok('N6-11 rétro-compat isPro:true = PRO (20+1 → ALLOW)', dec({ isPro: true, countReady: true, activeCount: 20, addCount: 1 }).allowed === true);
+// SOURCE : la nouvelle raison est câblée en feedback NEUTRE (jamais paywall) dans les 2 sites de décision.
+ok('N6-11 SOURCE ScanScreen mappe DENY_ENTITLEMENT_UNAVAILABLE → neutre (entitlementWait)', scan.includes('CAP_DECISION.DENY_ENTITLEMENT_UNAVAILABLE') && scan.includes('entitlementWait()'));
+ok('N6-11 SOURCE App.js Home Have mappe DENY_ENTITLEMENT_UNAVAILABLE → Alert neutre (pas paywall)', app.includes('CAP_DECISION.DENY_ENTITLEMENT_UNAVAILABLE') && app.includes('Vérification de ton abonnement'));
 
 console.log(`\ncapEnforcement: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

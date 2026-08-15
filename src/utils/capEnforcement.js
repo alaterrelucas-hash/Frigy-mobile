@@ -18,33 +18,56 @@
  */
 import { FREE_ITEMS_LIMIT } from '../config/purchases';
 
-// N6-09 (Phase 2.6, CR-18) : trois issues distinctes. « limite atteinte » (paywall) ≠ « compte pas
-// encore connu » (attendre). UNKNOWN ≠ ZERO : un compte n'autorise une création QUE s'il provient
-// d'un fetch réussi pour la MÊME famille (countReady). Sinon on refuse SANS ouvrir le paywall.
+// N6-09 (Phase 2.6, CR-18) + N6-11 (Phase 2, CR-15/16/17) : issues distinctes.
+//   ALLOW / DENY_CAP (limite Free atteinte → paywall) / DENY_COUNT_UNAVAILABLE (compte non hydraté →
+//   attendre) / DENY_ENTITLEMENT_UNAVAILABLE (l'autorité d'abonnement n'est pas établie ALORS que le
+//   palier ferait une différence → attendre, JAMAIS de paywall, JAMAIS d'insert).
 export const CAP_DECISION = {
   ALLOW: 'allowed',
-  DENY_CAP: 'limit',                 // limite Free réellement atteinte → paywall
-  DENY_COUNT_UNAVAILABLE: 'count-unavailable', // compte non hydraté/échec → attendre, PAS de paywall
+  DENY_CAP: 'limit',
+  DENY_COUNT_UNAVAILABLE: 'count-unavailable',
+  DENY_ENTITLEMENT_UNAVAILABLE: 'entitlement-unavailable',
 };
 
+// Statuts d'entitlement partagés avec entitlement.js (comparés en littéral pour rester sans dépendance).
+const PRO = 'pro';
+const FREE = 'free';
+
+// Résout l'autorité d'entitlement : `entitlement` (statut à 4 états) prime ; sinon rétro-compat booléen
+// (`isPro` true → PRO, false → FREE). Ni l'un ni l'autre → UNKNOWN.
+function resolveEntitlement(entitlement, isPro) {
+  if (typeof entitlement === 'string') return entitlement;
+  if (isPro === true) return PRO;
+  if (isPro === false) return FREE;
+  return 'unknown';
+}
+
 /**
- * Décision de création CENTRALE (pure). Pro : count-readiness NON requise (illimité). addCount<=0/
- * invalide → refus (jamais de bypass). Free + compte non prêt → DENY_COUNT_UNAVAILABLE. Free + compte
- * connu : lot ATOMIC sous la limite → ALLOW, sinon DENY_CAP.
+ * Décision de création CENTRALE (pure). N6-11 : l'autorité d'entitlement n'est requise QUE quand FREE et
+ * PRO produiraient un résultat DIFFÉRENT (c.-à-d. au dépassement de la limite). Sous la limite, on
+ * AUTORISE même si l'entitlement est UNKNOWN/ERROR (Free ET Pro autoriseraient) → Free Core préservé.
+ * Ordre canonique (§12) :
+ *   1. addCount invalide/≤0 → refus (jamais de bypass).
+ *   2. PRO → ALLOW (illimité, même compte indisponible).
+ *   3. compte non prêt → DENY_COUNT_UNAVAILABLE (N6-09, inchangé).
+ *   4. compte invalide → DENY_COUNT_UNAVAILABLE (UNKNOWN ≠ ZERO, inchangé).
+ *   5/6. ne dépasse PAS la limite → ALLOW (FREE, UNKNOWN, ERROR : le palier n'importe pas).
+ *   7. dépasserait : FREE → DENY_CAP (paywall) ; UNKNOWN/ERROR → DENY_ENTITLEMENT_UNAVAILABLE (neutre).
  */
-export function decideAddItems({ isPro = false, countReady = false, activeCount, addCount = 1, limit = FREE_ITEMS_LIMIT } = {}) {
+export function decideAddItems({ entitlement, isPro, countReady = false, activeCount, addCount = 1, limit = FREE_ITEMS_LIMIT } = {}) {
   const add = Number.isFinite(addCount) ? Math.floor(addCount) : 0;
   if (add <= 0) return { allowed: false, reason: CAP_DECISION.DENY_CAP };
-  if (isPro) return { allowed: true, reason: CAP_DECISION.ALLOW };
+  const status = resolveEntitlement(entitlement, isPro);
+  if (status === PRO) return { allowed: true, reason: CAP_DECISION.ALLOW };
   if (!countReady) return { allowed: false, reason: CAP_DECISION.DENY_COUNT_UNAVAILABLE };
-  // countReady=true mais compte INVALIDE (NaN / négatif / non-nombre / undefined) → PAS un foyer vide
-  // connu : fail-closed (UNKNOWN ≠ ZERO). On ne fabrique JAMAIS un zéro. Un vrai 0 reste valide.
+  // countReady=true mais compte INVALIDE (NaN / négatif / non-nombre / undefined) → fail-closed.
   if (!(Number.isFinite(activeCount) && activeCount >= 0)) return { allowed: false, reason: CAP_DECISION.DENY_COUNT_UNAVAILABLE };
   const active = Math.floor(activeCount);
   const max = Number.isFinite(limit) ? limit : FREE_ITEMS_LIMIT;
-  return (active + add <= max)
-    ? { allowed: true, reason: CAP_DECISION.ALLOW }
-    : { allowed: false, reason: CAP_DECISION.DENY_CAP };
+  if (active + add <= max) return { allowed: true, reason: CAP_DECISION.ALLOW };
+  // Dépasserait la limite Free → le palier fait la différence : l'autorité d'entitlement est requise.
+  if (status === FREE) return { allowed: false, reason: CAP_DECISION.DENY_CAP };
+  return { allowed: false, reason: CAP_DECISION.DENY_ENTITLEMENT_UNAVAILABLE };
 }
 
 // Rétro-compat : décision booléenne sur un compte CONNU (countReady implicite). Conservé pour les

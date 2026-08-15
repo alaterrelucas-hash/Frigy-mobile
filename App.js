@@ -21,6 +21,7 @@ import { styles } from './src/styles';
 import { searchImageByName } from './src/api/openfoodfacts';
 import { RC_API_KEY } from './src/config/purchases';
 import useSubscription from './src/hooks/useSubscription';
+import useProOffer from './src/hooks/useProOffer';
 
 import LoginScreen        from './src/screens/LoginScreen';
 import OnboardingScreen   from './src/screens/OnboardingScreen';
@@ -105,7 +106,8 @@ function App() {
   const [streak, setStreak] = useState(0);
   const [notifPrefs, setNotifPrefs] = useState({});
 
-  const { isPro, purchase, restore } = useSubscription();
+  const { status: entitlement, isPro, entitlementBusy, purchase, restore, refresh: refreshEntitlement } = useSubscription();
+  const { offerStatus, plans: offerPlans, reload: reloadOffer } = useProOffer();
 
   // Chargement runtime (OTA-compatible, aucun plugin natif) — App.js charge
   // uniquement la ressource. Seul Mon Stock reçoit fontFamily dans cette passe ;
@@ -222,9 +224,13 @@ function App() {
     // N6-09 (CR-18) : compte lisible SEULEMENT si hydraté pour la famille courante. Compte inconnu →
     // refus NEUTRE (chargement), JAMAIS le paywall (inconnu ≠ limite atteinte). Pro : jamais bloqué.
     const countReady = familyId != null && hydratedFamilyId === familyId;
-    const dec = decideAddItems({ isPro, countReady, activeCount: items?.length ?? 0, addCount: 1 });
+    // N6-11 (CR-15/16/17) : l'autorité d'entitlement (statut à 4 états) n'importe qu'au dépassement du
+    // cap. Compte inconnu → chargement ; entitlement non établi au cap → vérification NEUTRE (jamais
+    // paywall) ; limite Free atteinte → paywall. Pro : jamais bloqué.
+    const dec = decideAddItems({ entitlement, countReady, activeCount: items?.length ?? 0, addCount: 1 });
     if (!dec.allowed) {
       if (dec.reason === CAP_DECISION.DENY_COUNT_UNAVAILABLE) { Alert.alert('Stock en cours de chargement', 'Réessaie dans un instant.'); return; }
+      if (dec.reason === CAP_DECISION.DENY_ENTITLEMENT_UNAVAILABLE) { Alert.alert('Vérification de ton abonnement…', 'Réessaie dans un instant.'); return; }
       setPaywallOpen(true); return;
     }
     const category = 'Épicerie';
@@ -339,7 +345,7 @@ function App() {
           {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} onConfirmHave={handleConfirmHave} streak={streak} stockFontsLoaded={stockFontsLoaded} firstRun={stockInitialized === false && items.length === 0} />}
           {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} stockFontsLoaded={stockFontsLoaded} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
-          {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }}
+          {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} entitlement={entitlement} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }}
                   onClearAll={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId); setItems([]); }} />}
 
           <View style={styles.tabBar}>
@@ -375,13 +381,13 @@ function App() {
 
           <Modal visible={scanOpen} animationType="slide">
             <SafeAreaProvider>
-              <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} items={items} user={user} familyId={familyId} isPro={isPro} countReady={familyId != null && hydratedFamilyId === familyId} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }} />
+              <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} items={items} user={user} familyId={familyId} entitlement={entitlement} onRetryEntitlement={refreshEntitlement} countReady={familyId != null && hydratedFamilyId === familyId} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }} />
             </SafeAreaProvider>
           </Modal>
 
           <Modal visible={paywallOpen} animationType="slide" presentationStyle="pageSheet">
             <SafeAreaProvider>
-              <PaywallScreen onClose={() => setPaywallOpen(false)} onSuccess={() => setPaywallOpen(false)} purchase={purchase} restore={restore} />
+              <PaywallScreen onClose={() => setPaywallOpen(false)} onSuccess={() => setPaywallOpen(false)} entitlement={entitlement} entitlementBusy={entitlementBusy} offerStatus={offerStatus} plans={offerPlans} onReloadOffer={reloadOffer} onRetryEntitlement={refreshEntitlement} purchase={purchase} restore={restore} />
             </SafeAreaProvider>
           </Modal>
 
