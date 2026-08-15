@@ -7,10 +7,19 @@ import { formatQuantityLabel } from '../utils/quantity';
 // Ligne continue — pas de card individuelle, pas de FreshnessBar, pas de badge J-x,
 // pas de Nutri-Score, pas de brand/category. Ordre de lecture : aliment → nom →
 // quantité/état → temporalité → action.
-export default function InventoryProductRow({ item, theme, fonts, tier, focusIntensity = 0, isLast, onPress }) {
-  const days = computeDaysRemaining(item);
+export default function InventoryProductRow({ item, theme, fonts, tier, focusIntensity = 0, isLast, onPress, temporalDays, temporalEmphasisDays }) {
+  // N6-04 (isolation Home + séparation des canaux). Deux entrées optionnelles ; si absentes
+  // (Home : HomePriorityFocus/WatchList ne les passent pas) → fallback legacy computeDaysRemaining
+  // → Home inchangé (N6-13). `undefined` = prop absente ; `null` = valeur gatée valide (neutre).
+  //  • `days` → DESCRIPTEUR NEUTRE (« Dans 2 jours » / « Sans échéance connue ») : relation
+  //    temporelle, pas une urgence. Alimenté (Stock) par une projection autorité-aware.
+  //  • `emphasisDays` → COULEUR FORTE (rouge/orange, colorKey) = signal AMPLIFIÉ : exige DATE
+  //    + type de date supporté (Stock passe amplifiedTemporalDays ; vide → null → neutre).
+  //    La couleur ne peut donc pas dépasser la sémantique (CR-02 : valeur ≠ type).
+  const days = temporalDays !== undefined ? temporalDays : computeDaysRemaining(item);
+  const emphasisDays = temporalEmphasisDays !== undefined ? temporalEmphasisDays : days;
   const descriptor = getTemporalDescriptor(days);
-  const colorKey = getTemporalColorKey(days);
+  const colorKey = getTemporalColorKey(emphasisDays);
   const dotColor = theme[colorKey];
   const qtyLabel = formatQuantityLabel(item);
   // Temporel neutre (Plus tard) → 400 ; temporel en emphase (aujourd'hui/dépassé/

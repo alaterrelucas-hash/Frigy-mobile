@@ -12,6 +12,11 @@ import { supabase } from './src/config/supabase';
 import { initSentry, Sentry } from './src/config/sentry';
 import { posthog } from './src/config/posthog';
 import { C } from './src/config/constants';
+import { FREE_ITEMS_LIMIT } from './src/config/purchases';
+import { estimateDays, suggestLocation } from './src/utils/product';
+import { buildAssertionProvenance, CAPTURE_METHOD } from './src/utils/captureProvenance';
+import { selectExpiryPushes, buildNeutralPushContent } from './src/utils/notificationGate';
+import { strongTemporalDays } from './src/utils/temporalAuthority';
 import { styles } from './src/styles';
 import { searchImageByName } from './src/api/openfoodfacts';
 import { RC_API_KEY } from './src/config/purchases';
@@ -70,6 +75,17 @@ Notifications.setNotificationHandler({
 function App() {
   const [tab, setTab] = useState('home');
   const [items, setItems] = useState([]);
+  // Distingue FIRST_RUN (jamais initialisé) d'EMPTY_STOCK (déjà utilisé, stock redevenu vide).
+  // null = inconnu (on ne montre pas First Run tant qu'on ne sait pas). Le flag passe à true
+  // la 1ʳᵉ fois que le stock devient non-vide, et le reste (retour = EMPTY_STOCK, pas First Run).
+  const [stockInitialized, setStockInitialized] = useState(null);
+  useEffect(() => { AsyncStorage.getItem('frigy_stock_initialized').then((v) => setStockInitialized(v === '1')); }, []);
+  useEffect(() => {
+    if (items.length > 0 && stockInitialized === false) {
+      AsyncStorage.setItem('frigy_stock_initialized', '1');
+      setStockInitialized(true);
+    }
+  }, [items.length, stockInitialized]);
   const [user, setUser] = useState(null);
   const [familyId, setFamilyId] = useState(null);
   const [profileName, setProfileName] = useState('');
@@ -188,6 +204,31 @@ function App() {
     enrichItemImages(mapped);
   };
 
+  // LOW A « Confirmation Intelligente » — ajout RÉEL d'un produit confirmé « Je l'ai ».
+  // Réutilise le même flow que ScanScreen (insert items + defaults honnêtes : quantité choisie,
+  // location via suggestLocation, DLC via estimateDays — jamais de date fictive). Le recompute
+  // Home se fait naturellement via setItems (re-render → richness/signals/candidats recalculés).
+  const handleConfirmHave = async (cand, opts = {}) => {
+    if (!cand?.name || !familyId) return;
+    if (!isPro && (items?.length ?? 0) >= FREE_ITEMS_LIMIT) { setPaywallOpen(true); return; }
+    const category = 'Épicerie';
+    const quantity = opts.quantity || 1;
+    const days = estimateDays(category, cand.name);
+    const newItem = {
+      family_id: familyId, added_by: user?.id, name: cand.name, emoji: '🛒', brand: '',
+      category, location: suggestLocation(category, cand.name), quantity, total_units: quantity,
+      unit: '', dlc: '—', days_left: typeof days === 'number' ? days : 30, consumed: false,
+      // N6-08 : « Je l'ai » = présence DIRECT, mais AUCUN compte explicite → quantité UNKNOWN
+      // (quantityTouched false). Lignée HOME_HAVE persistée ; aucune date/type inventé.
+      assertion_provenance: buildAssertionProvenance({ captureMethod: CAPTURE_METHOD.HOME_HAVE, quantityTouched: false, dateEnteredByUser: false }),
+    };
+    try {
+      const { data, error } = await supabase.from('items').insert(newItem).select().single();
+      if (error || !data) return;
+      setItems((prev) => [...prev, { ...data, days: data.days_left, emoji: data.emoji || '🛒' }]);
+    } catch (e) { try { Sentry.captureException(e); } catch {} }
+  };
+
   const enrichItemImages = async (allItems) => {
     const missing = allItems.filter(i => !i.img_url).slice(0, 5);
     for (const item of missing) {
@@ -220,35 +261,26 @@ function App() {
 
     const now = new Date();
 
-    // ── Alertes DLC ─────────────────────────────────────────────
-    if (prefs.expirationAlerts !== false) {
-      const urgent = currentItems
-        .filter(i => i.days >= 0 && i.days <= 3)
-        .sort((a, b) => a.days - b.days)
-        .slice(0, 5);
-
-      for (const item of urgent) {
-        if (prefs.dayBeforeReminder === false && item.days === 1) continue;
-        const trigger = new Date();
-        if (item.days === 0) {
-          trigger.setHours(18, 0, 0, 0);
-          if (trigger <= now) continue;
-        } else {
-          trigger.setDate(trigger.getDate() + item.days);
-          trigger.setHours(9, 0, 0, 0);
-        }
-        const when = item.days === 0 ? "aujourd'hui" : item.days === 1 ? 'demain' : `dans ${item.days} jours`;
-        const recipeHint = prefs.recipeSuggestions !== false ? ' Une recette t\'attend dans l\'app 👨‍🍳' : '';
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `${item.emoji} ${item.name} expire ${when}`,
-            body: `Ne le gaspille pas !${recipeHint}`,
-            sound: true,
-            data: { screen: 'recipes' },
-          },
-          trigger,
-        });
+    // ── Alertes temporelles (N6-03 — Notification Truth Gate) ───
+    // Gate de vérité : Présence active + autorité TEMPORELLE = DATE (date absolue réelle et
+    // courante) uniquement. Heuristique d'ouverture / estimate non ancré / fallback /
+    // `days_left` périmé n'autorisent JAMAIS une interruption. Wording NEUTRE (Date Type
+    // inconnu → CR-02 : ni « expire », ni jour-butoir). Zéro push éligible = silence valide.
+    // La vérité temporelle vient de la couche canonique (deriveTemporalState), pas de i.days.
+    for (const { item, daysRemaining } of selectExpiryPushes(currentItems, prefs, now)) {
+      const trigger = new Date();
+      if (daysRemaining === 0) {
+        trigger.setHours(18, 0, 0, 0);
+        if (trigger <= now) continue;
+      } else {
+        trigger.setDate(trigger.getDate() + daysRemaining);
+        trigger.setHours(9, 0, 0, 0);
       }
+      const { title, body } = buildNeutralPushContent(item);
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: true, data: { screen: 'recipes' } },
+        trigger,
+      });
     }
 
     // ── Récap hebdomadaire (lundi 9h) ────────────────────────────
@@ -291,11 +323,18 @@ function App() {
   };
 
   useEffect(() => {
-    if (!items.length || !user?.id) return;
+    // N6-03 : l'annulation des anciens planning doit s'exécuter même à stock vide
+    // (transition N→0 = éligibilité zéro). Ne PAS gater sur items.length, sinon les
+    // pushes déjà confiés au scheduler natif survivraient. scheduleAllNotifications
+    // annule tout (cancelAll) PUIS reconstruit (expiry gaté + récaps) à chaque run.
+    if (!user?.id) return;
     scheduleAllNotifications(items, notifPrefs);
   }, [items, notifPrefs]);
 
-  const expiring = items.filter(i => i.days <= 4).sort((a, b) => a.days - b.days);
+  // N6-04 : le badge d'onglet est un signal FORT/amplifié (compteur rouge de navigation) →
+  // exige l'autorité DATE (date réelle). Heuristique d'ouverture = soft, ne compte PAS ici ;
+  // scalaire périmé / estimate / fallback non plus. (HomeScreen ignore la prop `expiring`.)
+  const expiring = items.filter(i => { const d = strongTemporalDays(i); return d !== null && d <= 4; });
 
   return (
     <SafeAreaProvider>
@@ -314,7 +353,7 @@ function App() {
         <LoginScreen onLogin={(u, name) => { setUser(u); setupProfile(u.id, name); }} />
       ) : (
         <SafeAreaView style={styles.safe}>
-          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} streak={streak} />}
+          {tab === 'home'    && <HomeScreen items={items} expiring={expiring} onNav={setTab} onScan={() => setScanOpen(true)} onUrgent={() => { setFridgeUrgent(true); setTab('fridge'); }} profileName={profileName} familyId={familyId} onItemPress={item => { setFridgeInitialItem(item); setTab('fridge'); }} onShopping={() => setShoppingOpen(true)} onConfirmHave={handleConfirmHave} streak={streak} stockFontsLoaded={stockFontsLoaded} firstRun={stockInitialized === false && items.length === 0} />}
           {tab === 'fridge'  && <FridgeScreen items={items} setItems={setItems} user={user} familyId={familyId} urgentMode={fridgeUrgent} onExitUrgent={() => setFridgeUrgent(false)} initialItem={fridgeInitialItem} onInitialItemConsumed={() => setFridgeInitialItem(null)} onScan={() => setScanOpen(true)} onShopping={() => setShoppingOpen(true)} stockFontsLoaded={stockFontsLoaded} />}
           {tab === 'recipes' && <RecipesScreen items={items} user={user} isPro={isPro} onPaywall={() => setPaywallOpen(true)} />}
           {tab === 'profile' && <ProfileScreen profileName={profileName} user={user} familyId={familyId} isPro={isPro} onPaywall={() => setPaywallOpen(true)} onNameChange={setProfileName} onPrefsChange={(prefs) => { setNotifPrefs(prefs); }} onClearFridge={async () => { if (!familyId) return; await supabase.from('items').delete().eq('family_id', familyId).eq('consumed', false); setItems([]); }}

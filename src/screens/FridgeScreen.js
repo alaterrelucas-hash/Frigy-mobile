@@ -12,7 +12,10 @@ import { supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
 import { C, urgBg, urgLbl, LOC_ITEMS } from '../config/constants';
 import { parseDlc, formatDlcInput, getStorageTip, estimateOpeningDays, estimateDays } from '../utils/product';
+import { formatQuantityLabel } from '../utils/quantity';
+import { withDateValueCorrection } from '../utils/captureProvenance';
 import { computeDaysRemaining, getTemporalTier, TEMPORAL_TIER } from '../utils/temporal';
+import { passiveTemporalDays, amplifiedTemporalDays } from '../utils/temporalAuthority';
 import { useStockTheme } from '../utils/stockTheme';
 import { DEV_PREVIEW_STOCK_ENABLED, DEV_PREVIEW_MODE, getDevPreviewItems, getVisualQAItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
 import { resolveFoodImage } from '../utils/foodLanguage';
@@ -23,7 +26,10 @@ import InventoryHeader from '../components/InventoryHeader';
 
 const BG = '#F7F9F8';
 
-const FILTERS = ['Tous', 'À consommer', 'DLC proche'];
+// N6-04 : libellés de filtre = RELATION temporelle neutre (« quand »), jamais consigne de
+// consommation (« À consommer ») ni type de date (« DLC ») — le nom de champ `dlc` n'est pas
+// une vérité affichable tant que le type est inconnu. Prédicats inchangés (≤4 / ≤7).
+const FILTERS = ['Tous', 'Date proche', 'Sous 7 jours'];
 
 // Masqué le temps de la revue visuelle pour éviter le doublon avec le "+" global
 // de la navigation (App.js). Décision finale à prendre avec le Master Navigation —
@@ -138,14 +144,24 @@ export default function FridgeScreen({
     if (initialItem) { setSelectedItem(initialItem); onInitialItemConsumed?.(); }
   }, [initialItem]);
 
-  const urgent = localItems.filter(i => i.days <= 4).sort((a, b) => a.days - b.days);
-  const rest   = localItems.filter(i => i.days > 4).sort((a, b) => a.days - b.days);
+  // N6-04 (plafond amplifié) : « urgentMode » = urgence de CONSOMMATION forte → exige non
+  // seulement une DATE réelle mais un TYPE de date supporté (amplifiedTemporalDays). Type
+  // inconnu aujourd'hui → ensemble vide → AUCUN item temporellement urgent (état truthful ;
+  // l'architecture du mode reste intacte). Heuristique/estimate/fallback n'y entrent jamais.
+  // (`rest` legacy = code mort, retiré.)
+  const urgent = localItems
+    .map(i => ({ i, d: amplifiedTemporalDays(i) }))
+    .filter(x => x.d !== null && x.d <= 4)
+    .sort((a, b) => a.d - b.d)
+    .map(x => x.i);
 
   const applyFilter = (list) => {
     let out = list;
     if (q) out = out.filter(i => i.name.toLowerCase().includes(q.toLowerCase()));
-    if (activeFilter === 'À consommer') out = out.filter(i => (computeDaysRemaining(i) ?? 99) <= 4);
-    if (activeFilter === 'DLC proche')  out = out.filter(i => (computeDaysRemaining(i) ?? 99) <= 7);
+    // N6-04 : filtres temporels (quiet) gatés sur l'autorité — un estimate non ancré / fallback
+    // / scalaire périmé (→ null) ne « consomme » ni « DLC proche » (jamais compté via 99).
+    if (activeFilter === 'Date proche') out = out.filter(i => (passiveTemporalDays(i) ?? 99) <= 4);
+    if (activeFilter === 'Sous 7 jours') out = out.filter(i => (passiveTemporalDays(i) ?? 99) <= 7);
     return out;
   };
 
@@ -165,6 +181,12 @@ export default function FridgeScreen({
       days_left: dlcDays !== null ? dlcDays : selectedItem.days_left,
       location: editFields.location,
     };
+    // N6-08 : correction EXPLICITE de la date par l'utilisateur → dateValue DIRECT. Merge LOSSLESS :
+    // ne patche QUE dateValue, préserve quantity/dateType/captureMethod + clés futures. Ne crée
+    // aucune autorité pour les assertions non corrigées (legacy reste UNKNOWN ailleurs). Aucun
+    // événement causal (consumed/wasted) — une correction ≠ un fait physique (N6-07).
+    const dateChanged = (editFields.dlcInput || '—') !== (selectedItem.dlc || '—');
+    if (dateChanged) updates.assertion_provenance = withDateValueCorrection(selectedItem.assertion_provenance);
     // Le nom a changé → la primitive Food Language peut ne plus correspondre :
     // on la re-résout (localImage repart de zéro pour laisser withFoodLanguage
     // trancher sur le nouveau nom). Inchangé si le nom est identique.
@@ -237,8 +259,16 @@ export default function FridgeScreen({
   const DetailModal = () => {
     if (!selectedItem) return null;
     const item = selectedItem;
-    const isPack = (item.total_units || 1) > 1;
+    // N6-07 (CR-04) : libellé quantité gaté par l'autorité (deriveQuantityState). Provenance
+    // actuelle insuffisante → UNKNOWN → null → aucune ligne « Quantité » (plus de faux « 1 unité »
+    // ni de « N/M restants » sur un dénominateur non prouvé). La présence de la ligne stock atteste
+    // déjà la cohorte représentée. Autorité KNOWN restaurée par N6-08 (provenance de capture).
+    const quantityLabel = formatQuantityLabel(item);
     const dlcFormatted = item.dlc && item.dlc !== '—' ? item.dlc : null;
+    // N6-04 : le badge J- COLORÉ (urgBg rouge/orange) est un signal AMPLIFIÉ → exige DATE +
+    // type de date supporté (amplifiedTemporalDays). Type inconnu → pas de badge coloré fort
+    // (la date factuelle reste visible via dlcFormatted plus bas — relation neutre préservée).
+    const detailDays = amplifiedTemporalDays(item);
     const closeModal = () => { setSelectedItem(null); setEditMode(false); };
 
     return (
@@ -331,10 +361,12 @@ export default function FridgeScreen({
                               resizeMode="cover" onError={() => setDetailImgError(true)} />
                           : <Text style={{ fontSize: 52 }}>{item.emoji}</Text>}
                       </View>
-                      <View style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 100,
-                        backgroundColor: urgBg(item.days), marginBottom: 10 }}>
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>J-{item.days}</Text>
-                      </View>
+                      {detailDays !== null && (
+                        <View style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 100,
+                          backgroundColor: urgBg(detailDays), marginBottom: 10 }}>
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>J-{detailDays}</Text>
+                        </View>
+                      )}
                       <Text style={{ fontSize: 22, fontWeight: '800', color: C.t1, textAlign: 'center', marginBottom: 4 }}>{item.name}</Text>
                       <Text style={{ fontSize: 13, color: C.t3 }}>{item.brand ? `${item.brand} · ` : ''}{item.category} · {item.location}</Text>
                     </View>
@@ -401,14 +433,16 @@ export default function FridgeScreen({
                         />
                       </View>
 
-                      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
-                        borderBottomWidth: item.price ? 1 : 0, borderBottomColor: C.border }}>
-                        <Package size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
-                        <Text style={{ flex: 1, fontSize: 14, color: C.t2 }}>Quantité</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>
-                          {isPack ? `${item.quantity}/${item.total_units} restant${item.quantity > 1 ? 's' : ''}` : '1 unité'}
-                        </Text>
-                      </View>
+                      {quantityLabel && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
+                          borderBottomWidth: item.price ? 1 : 0, borderBottomColor: C.border }}>
+                          <Package size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                          <Text style={{ flex: 1, fontSize: 14, color: C.t2 }}>Quantité</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>
+                            {quantityLabel}
+                          </Text>
+                        </View>
+                      )}
                       {item.price && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}>
                           <Euro size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
@@ -458,23 +492,26 @@ export default function FridgeScreen({
             <View style={{ flex: 1, height: 1, backgroundColor: C.red + '30' }} />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-            {urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => (
+            {urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => {
+              // Jours affichés = projection amplifiée (DATE + type supporté), cohérente avec le set.
+              const d = amplifiedTemporalDays(item);
+              return (
               <TouchableOpacity key={item.id} onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
                 style={[styles.fridgeRow, { marginBottom: 9 }]}>
                 <Text style={{ fontSize: 36, marginRight: 12 }}>{item.emoji}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.productName}>{item.name}</Text>
                   <Text style={styles.productSub}>{item.brand || item.category} · {item.location}</Text>
-                  <FreshnessBar days={item.days} />
+                  <FreshnessBar days={d} />
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <View style={[styles.urgBadge, { backgroundColor: urgBg(item.days) }]}>
-                    <Text style={styles.urgText}>{urgLbl(item.days)}</Text>
+                  <View style={[styles.urgBadge, { backgroundColor: urgBg(d) }]}>
+                    <Text style={styles.urgText}>{urgLbl(d)}</Text>
                   </View>
                   <NutritionBadge grade={item.nutri_grade} />
                 </View>
               </TouchableOpacity>
-            ))}
+            ); })}
           </ScrollView>
         </View>
       )}
@@ -491,16 +528,19 @@ export default function FridgeScreen({
   const scopedItems   = localItems.filter(i => i.location === activeScope);
   const filteredScoped = applyFilter(scopedItems);
 
+  // N6-04 (R-02) : tiers Stock normal sur la projection AUTORITAIRE (DATE + heuristique ancrée ;
+  // NONE → null → tier « Plus tard »). Un estimate NON ancré / fallback / scalaire périmé
+  // n'obtient plus de position PRIORITÉ/PROCHAINEMENT (fin de la fuite via computeDaysRemaining).
   const priorityItems = filteredScoped
-    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.PRIORITY)
-    .sort((a, b) => computeDaysRemaining(a) - computeDaysRemaining(b));
+    .filter(i => getTemporalTier(passiveTemporalDays(i)) === TEMPORAL_TIER.PRIORITY)
+    .sort((a, b) => passiveTemporalDays(a) - passiveTemporalDays(b));
   const soonItems = filteredScoped
-    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.SOON)
-    .sort((a, b) => computeDaysRemaining(a) - computeDaysRemaining(b));
+    .filter(i => getTemporalTier(passiveTemporalDays(i)) === TEMPORAL_TIER.SOON)
+    .sort((a, b) => passiveTemporalDays(a) - passiveTemporalDays(b));
   const laterItems = filteredScoped
-    .filter(i => getTemporalTier(computeDaysRemaining(i)) === TEMPORAL_TIER.LATER)
+    .filter(i => getTemporalTier(passiveTemporalDays(i)) === TEMPORAL_TIER.LATER)
     .sort((a, b) => {
-      const da = computeDaysRemaining(a), db = computeDaysRemaining(b);
+      const da = passiveTemporalDays(a), db = passiveTemporalDays(b);
       if (da === null) return 1;
       if (db === null) return -1;
       return da - db;
@@ -513,9 +553,13 @@ export default function FridgeScreen({
   // (statique, jamais conditionnelle au contenu) — le rouge de "priorité" est
   // la teinte propre à la section, pas un signal déclenché par un item dépassé.
   const sections = [
-    { key: TEMPORAL_TIER.PRIORITY, label: 'À utiliser en priorité', items: priorityItems, labelColor: theme.critical },
-    { key: TEMPORAL_TIER.SOON,     label: 'À utiliser prochainement', items: soonItems,    labelColor: theme.attention },
-    { key: TEMPORAL_TIER.LATER,    label: 'Plus tard',               items: laterItems,    labelColor: theme.text1 },
+    // N6-04 (plafond sémantique des LIBELLÉS) : le regroupement temporel reste inchangé, mais
+    // le libellé décrit la RELATION (« quand ») et non une INSTRUCTION de consommation. Type de
+    // date inconnu → jamais « à utiliser en priorité/prochainement » (consigne) ni couleur forte
+    // (rouge/orange = claim). Couleur neutre pour les trois sections. (DLC/DDM/expiration : N6-08.)
+    { key: TEMPORAL_TIER.PRIORITY, label: 'Date atteinte',   items: priorityItems, labelColor: theme.text1 },
+    { key: TEMPORAL_TIER.SOON,     label: 'Prochains jours', items: soonItems,     labelColor: theme.text1 },
+    { key: TEMPORAL_TIER.LATER,    label: 'Autres produits', items: laterItems,    labelColor: theme.text1 },
   ];
 
   const scopeLabel = activeScope === 'Frigo' ? 'le frigo' : activeScope === 'Congélateur' ? 'le congélateur' : 'le placard';
@@ -611,7 +655,16 @@ export default function FridgeScreen({
                     theme={theme}
                     fonts={fonts}
                     tier={section.key}
-                    focusIntensity={naturalFocusIntensity(computeDaysRemaining(item))}
+                    // N6-04 — séparation des canaux (isolation Home : props consommées ici
+                    // seulement ; Home ne les passe pas → comportement legacy inchangé, N6-13) :
+                    //  • temporalDays = descripteur NEUTRE « Dans 2 jours » (DATE + heuristique
+                    //    ancrée ; NONE → null → « Sans échéance connue »). Relation, pas urgence.
+                    //  • temporalEmphasisDays = couleur FORTE rouge/orange = signal AMPLIFIÉ →
+                    //    DATE + type supporté (amplifiedTemporalDays ; vide aujourd'hui → neutre).
+                    //  • HALO Natural Focus = amplification → même plafond amplifié.
+                    temporalDays={passiveTemporalDays(item)}
+                    temporalEmphasisDays={amplifiedTemporalDays(item)}
+                    focusIntensity={naturalFocusIntensity(amplifiedTemporalDays(item))}
                     isLast={idx === section.items.length - 1}
                     onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
                   />

@@ -6,8 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RECIPES_FN_URL, SPOONACULAR_KEY } from '../config/urls';
 import { SUPABASE_KEY, supabase } from '../config/supabase';
 import { posthog } from '../config/posthog';
-import { C, CATEGORY_PRICE } from '../config/constants';
+import { C } from '../config/constants';
 import { getCachedImage, saveCachedImage } from '../api/recipeImages';
+import { passiveTemporalDays, amplifiedTemporalDays } from '../utils/temporalAuthority';
+import { resolveIngredientIdentity, IDENTITY } from '../utils/ingredientIdentity';
 
 async function spoonacularSearch(query) {
   try {
@@ -37,38 +39,29 @@ async function fetchRecipeImage(r) {
 const RECIPES_CACHE_KEY       = 'fridgy_recipes_cache_v2';
 const RECIPES_LAST_REFRESH_KEY = 'fridgy_recipes_last_refresh_v2';
 
-function splitIngredients(ingredients = [], expiringItems = []) {
-  const names = new Set(expiringItems.map(i => i.name.toLowerCase()));
-  return {
-    urgent:        ingredients.filter(ing => names.has(ing.toLowerCase())),
-    complementary: ingredients.filter(ing => !names.has(ing.toLowerCase())),
-  };
-}
-
+// N6-05/N6-06 : identité gatée (CR-05). MATCH = équivalence normalisée STRICTE avec ≥1 cohorte
+// représentée (jamais substring/token/catégorie/localisation). Sinon UNRESOLVED — un no-match
+// technique n'est PAS une preuve d'absence : ni « missing », ni « À ACHETER », ni Courses.
+// N6-06 (CR-11/CR-24) : AUCUNE valeur € dérivée ici. Le prix de repli (CATEGORY_PRICE / 2,5) est
+// une invention non fiable, et un MATCH d'identité ≠ prix ≠ économie causale. `matched` = évidence
+// d'identité POSITIVE (cohorte représentative ; quantités jamais sommées — N6-07). Le nom
+// « calculateROI » est conservé (renommer élargirait le scope) mais ne calcule plus aucun ROI.
 function calculateROI(ingredients = [], allItems = []) {
   const matched = [];
-  const missing = [];
+  const unresolved = [];
   ingredients.forEach(ing => {
-    const ingLower = ing.toLowerCase();
-    const match = allItems.find(item => {
-      const n = item.name.toLowerCase();
-      return ingLower.includes(n) || n.split(' ').some(w => w.length > 3 && ingLower.includes(w));
-    });
-    if (match) matched.push({ ingredient: ing, item: match });
-    else missing.push(ing);
+    const res = resolveIngredientIdentity(ing, allItems);
+    if (res.status === IDENTITY.MATCH) matched.push({ ingredient: ing, item: res.matches[0] });
+    else unresolved.push(ing);
   });
-  const value = matched.reduce((sum, m) => {
-    return sum + (m.item.price || CATEGORY_PRICE[m.item.category] || 2.5);
-  }, 0);
-  return { matched, missing, value };
+  return { matched, unresolved };
 }
 
 /* ── RecipeModal ── */
 
 function RecipeModal({ recipe, onClose, expiringItems, allItems }) {
   if (!recipe) return null;
-  const { urgent, complementary } = splitIngredients(recipe.ingredients, expiringItems);
-  const { matched, missing, value } = calculateROI(recipe.ingredients || [], allItems || []);
+  const { matched } = calculateROI(recipe.ingredients || [], allItems || []);
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -111,18 +104,9 @@ function RecipeModal({ recipe, onClose, expiringItems, allItems }) {
                 borderWidth: 1, borderColor: C.border }}>
                 <Text style={{ fontSize: 13, color: C.t2, fontWeight: '600' }}>{recipe.diff}</Text>
               </View>
-              {recipe.saves && (
-                <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#FFFBEB', borderRadius: 100 }}>
-                  <Text style={{ fontSize: 13, color: '#92661A', fontWeight: '700' }}>−{recipe.saves}€ économisés</Text>
-                </View>
-              )}
-              {value > 0 && (
-                <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#F0FBF0', borderRadius: 100, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={{ fontSize: 13, color: C.green, fontWeight: '700' }}>
-                    💰 {value.toFixed(2).replace('.', ',')}€ déjà dans ton frigo
-                  </Text>
-                </View>
-              )}
+              {/* N6-06 (CR-11/CR-24) : badges « −X€ économisés » et « X€ déjà dans ton frigo »
+                  retirés. Prix de repli non fiable + un MATCH d'identité ne prouve ni prix, ni
+                  économie causale, ni localisation Frigo. Silence : aucune valeur € inventée. */}
             </View>
 
             {recipe.desc && (
@@ -136,81 +120,38 @@ function RecipeModal({ recipe, onClose, expiringItems, allItems }) {
                 INGRÉDIENTS
               </Text>
 
-              {urgent.length > 0 && (
-                <>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#FF3B30', letterSpacing: 0.5, marginBottom: 8 }}>
-                    À CONSOMMER EN PRIORITÉ
-                  </Text>
-                  {urgent.map((ing, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
-                      paddingVertical: 10, borderBottomWidth: i < urgent.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3B30' }} />
-                      <Text style={{ fontSize: 14, color: C.t1, fontWeight: '500' }}>{ing}</Text>
-                    </View>
-                  ))}
-                  {complementary.length > 0 && <View style={{ height: 12 }} />}
-                </>
-              )}
-
-              {complementary.length > 0 && (
-                <>
-                  {urgent.length > 0 && (
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: C.t3, letterSpacing: 0.5, marginBottom: 8 }}>
-                      AUTRES INGRÉDIENTS
-                    </Text>
-                  )}
-                  {complementary.map((ing, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
-                      paddingVertical: 10, borderBottomWidth: i < complementary.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.green }} />
-                      <Text style={{ fontSize: 14, color: C.t1, fontWeight: '500' }}>{ing}</Text>
-                    </View>
-                  ))}
-                </>
-              )}
-
-              {!urgent.length && !complementary.length && matched.length === 0 && (recipe.ingredients || []).map((ing, i) => (
+              {/* N6-06 : liste NEUTRE de tous les ingrédients. Le split « À CONSOMMER EN PRIORITÉ »
+                  (rouge) transformait une pertinence temporelle QUIET (N6-04) en instruction de
+                  consommation forte (§29) → retiré. Aucune couleur d'alarme, aucun ordre d'urgence. */}
+              {(recipe.ingredients || []).map((ing, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
-                  paddingVertical: 10, borderBottomWidth: i < recipe.ingredients.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
+                  paddingVertical: 10, borderBottomWidth: i < ((recipe.ingredients || []).length - 1) ? 1 : 0, borderBottomColor: C.border }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.green }} />
                   <Text style={{ fontSize: 14, color: C.t1, fontWeight: '500' }}>{ing}</Text>
                 </View>
               ))}
 
-              {/* ROI — ingrédients déjà dans le frigo */}
+              {/* N6-06 (CR-06) : identité confirmée (MATCH strict N6-05) = relation POSITIVE au
+                  Stock. « FRIGO » → « STOCK » : un MATCH n'établit PAS la localisation Frigo (Stock
+                  ≠ Frigo). Prix par ingrédient retiré (CR-24). Aucune quantité/faisabilité impliquée. */}
               {matched.length > 0 && (
                 <>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: C.green, letterSpacing: 0.5, marginTop: 8, marginBottom: 8 }}>
-                    ✅ DÉJÀ DANS TON FRIGO
+                    ✅ DÉJÀ DANS TON STOCK
                   </Text>
                   {matched.map((m, i) => (
                     <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
                       paddingVertical: 8, borderBottomWidth: i < matched.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.green }} />
                       <Text style={{ flex: 1, fontSize: 14, color: C.t1, fontWeight: '500' }}>{m.ingredient}</Text>
-                      <Text style={{ fontSize: 12, color: C.green, fontWeight: '700' }}>
-                        {(m.item.price || CATEGORY_PRICE[m.item.category] || 2.5).toFixed(2).replace('.', ',')}€
-                      </Text>
                     </View>
                   ))}
                 </>
               )}
 
-              {/* Ingrédients manquants */}
-              {missing.length > 0 && (
-                <>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: C.t3, letterSpacing: 0.5, marginTop: 14, marginBottom: 8 }}>
-                    🛒 À ACHETER
-                  </Text>
-                  {missing.map((ing, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12,
-                      paddingVertical: 8, borderBottomWidth: i < missing.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.t4 }} />
-                      <Text style={{ fontSize: 14, color: C.t2, fontWeight: '500' }}>{ing}</Text>
-                    </View>
-                  ))}
-                </>
-              )}
+              {/* N6-05/N6-06 : aucune section « À ACHETER » dérivée d'un no-match. UNRESOLVED n'est
+                  ni « manquant » ni « à acheter » (Recipe Gap ≠ Shopping Intent). Silence par défaut :
+                  les ingrédients non résolus restent simplement dans la liste neutre ci-dessus. */}
             </View>
 
             {/* Étapes */}
@@ -254,9 +195,18 @@ export default function RecipesScreen({ items, user }) {
   const [favorites,      setFavorites]      = useState(new Set());
   const [canRefresh,     setCanRefresh]     = useState(false);
 
-  const expiring  = items.filter(i => i.days <= 7).sort((a, b) => a.days - b.days);
+  // N6-04 : pertinence temporelle passive gatée sur l'autorité canonique. Un item sans date
+  // réelle / estimate non ancré / fallback / scalaire périmé n'a AUCUNE position temporelle →
+  // n'entre pas dans « expire bientôt ». N6-06 (CR-02) : le wording « expirent » du header a été
+  // neutralisé en « de ton stock » (une date sans type supporté ne prouve pas une péremption).
+  const expiring = items
+    .map(i => ({ i, d: passiveTemporalDays(i) }))
+    .filter(x => x.d !== null && x.d <= 7)
+    .sort((a, b) => a.d - b.d)
+    .map(x => x.i);
+  const expiringIds = new Set(expiring.map(i => i.id));
   const forRecipes = expiring.length >= 2
-    ? [...expiring, ...items.filter(i => i.days > 7)].slice(0, 15)
+    ? [...expiring, ...items.filter(i => !expiringIds.has(i.id))].slice(0, 15)
     : items.slice(0, 15);
 
   const loadImages = (recipeList) => {
@@ -360,10 +310,13 @@ export default function RecipesScreen({ items, user }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View>
             <Text style={{ fontSize: 40, fontWeight: '900', color: C.t1, letterSpacing: -1.5 }}>Recettes</Text>
+            {/* N6-06 : relation NON quantitative. `expiring.length` (contexte de génération) ne
+                prouve PAS combien de produits fondent réellement les recettes affichées (contexte
+                de génération ≠ compte de relation prouvée). On retire le « N produits » : « à partir
+                de ton stock » décrit le contexte sans fausse précision. `expiring` reste utilisé
+                ailleurs (forRecipes, puces) — non touché. */}
             <Text style={{ fontSize: 14, color: C.t3, marginTop: 4 }}>
-              {expiring.length > 0
-                ? `Basées sur ${expiring.length} produit${expiring.length > 1 ? 's' : ''} qui expirent bientôt`
-                : 'Basées sur ton stock du moment'}
+              Des idées à partir de ton stock
             </Text>
           </View>
           {canRefresh && (
@@ -384,7 +337,12 @@ export default function RecipesScreen({ items, user }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 16 }}>
           {expiring.slice(0, 6).map(p => {
-            const critical = p.days <= 1;
+            // Puce = pertinence QUIET (DATE + heuristique ancrée) → jour affiché pd (relation).
+            // Rouge « critical » = signal AMPLIFIÉ/alarmant → exige DATE + type supporté (ad).
+            // Type inconnu aujourd'hui → ad null → jamais de rouge critical (état truthful).
+            const pd = passiveTemporalDays(p);
+            const ad = amplifiedTemporalDays(p);
+            const critical = ad !== null && ad <= 1;
             return (
               <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6,
                 paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14,
@@ -397,7 +355,7 @@ export default function RecipesScreen({ items, user }) {
                   {p.emoji} {p.name}
                 </Text>
                 <Text style={{ fontSize: 11, fontWeight: '800',
-                  color: critical ? '#FF3B30' : '#FF9500' }}>J-{p.days}</Text>
+                  color: critical ? '#FF3B30' : '#FF9500' }}>J-{pd}</Text>
               </View>
             );
           })}
@@ -450,8 +408,6 @@ export default function RecipesScreen({ items, user }) {
 
         {/* ─── RECIPE CARDS ─── */}
         {!loading && filteredRecipes.map((r, i) => {
-          const { urgent } = splitIngredients(r.ingredients, expiring);
-          const { matched: roiMatched, value: roiValue } = calculateROI(r.ingredients || [], items);
           const isFav = favorites.has(r.name);
 
           return (
@@ -485,34 +441,10 @@ export default function RecipesScreen({ items, user }) {
                     fill={isFav ? '#FF3B30' : 'none'} />
                 </TouchableOpacity>
 
-                {/* Badge urgents sur image */}
-                {urgent.length > 0 && (
-                  <View style={{ position: 'absolute', top: 12, left: 12,
-                    paddingHorizontal: 10, paddingVertical: 5,
-                    backgroundColor: 'rgba(255,59,48,0.88)', borderRadius: 100 }}>
-                    <Text style={{ fontSize: 11, color: '#fff', fontWeight: '800' }}>
-                      🔴 {urgent.length} à consommer
-                    </Text>
-                  </View>
-                )}
-
-                {/* Badge ROI frigo */}
-                {roiValue > 0 && (
-                  <View style={{ position: 'absolute', bottom: 12, left: 12,
-                    paddingHorizontal: 10, paddingVertical: 5,
-                    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 100 }}>
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>
-                      💰 {roiValue.toFixed(2).replace('.', ',')}€ dans ton frigo
-                    </Text>
-                  </View>
-                )}
-                {!roiValue && r.saves && (
-                  <View style={{ position: 'absolute', bottom: 12, left: 12,
-                    paddingHorizontal: 10, paddingVertical: 5,
-                    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 100 }}>
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>−{r.saves}€ économisés</Text>
-                  </View>
-                )}
+                {/* N6-06 : badges retirés de la carte. « 🔴 N à consommer » = instruction de
+                    consommation forte sur pertinence temporelle QUIET (§29) ; « X€ dans ton frigo »
+                    et « −X€ économisés » = valeur € non fondée + localisation Frigo non prouvée
+                    (CR-06/CR-11/CR-24). Silence : la carte garde image, titre, temps, difficulté. */}
               </View>
 
               {/* Content */}

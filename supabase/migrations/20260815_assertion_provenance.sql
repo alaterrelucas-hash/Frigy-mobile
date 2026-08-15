@@ -1,0 +1,42 @@
+-- N6-08 — Forward capture provenance (CR-03 / CR-01 / CR-02 / CR-04 input).
+--
+-- BUT : distinguer durablement une ASSERTION EXPLICITE de l'utilisateur (quantité éditée, date
+-- saisie, type de date choisi) d'un DÉFAUT technique ou d'une valeur MACHINE — de sorte que la
+-- preuve survive save → reload → helper d'autorité. Aujourd'hui aucune colonne ne le permet, donc
+-- tout dégrade en UNKNOWN (sûr pour la preuve faible, MAIS perd la vraie preuve explicite).
+--
+-- CHOIX : UNE seule colonne JSONB NULLABLE (Option A), vs 5+ colonnes dédiées (Option B) :
+--   - additive minimale (1 colonne) ; extensible sans nouvelle migration ;
+--   - autorité PAR ASSERTION (quantity / dateValue / dateType) dans un objet clair ;
+--   - hydratation Supabase triviale (objet JS) ; legacy = NULL = aucune preuve = UNKNOWN.
+--
+-- RÈGLES ABSOLUES :
+--   - ADDITIVE, NULLABLE, FORWARD-ONLY, rétrocompatible (anciens clients ignorent la colonne).
+--   - AUCUN DEFAULT qui inventerait une autorité ; NULL signifie « aucune preuve nouvelle ».
+--   - AUCUN BACKFILL sémantique : les lignes existantes restent NULL → l'autorité legacy reste
+--     EXACTEMENT ce que disent N6-01 / N6-07 (quantité UNKNOWN, dateType UNKNOWN, etc.).
+--
+-- Forme attendue (documentaire — non contrainte par le schéma, forward-extensible) :
+--   {
+--     "version": 1,
+--     "captureMethod": "BARCODE" | "RECEIPT" | "PHOTO" | "HOME_HAVE" | "MANUAL",
+--     "quantity":  { "authority": "DIRECT" | "CONFIRMED" | "UNKNOWN", "source": "USER_EDIT" | "DEFAULT" | "MACHINE" | null },
+--     "dateValue": { "authority": "DIRECT" | "CONFIRMED" | "DERIVED" | "UNKNOWN" },
+--     "dateType":  { "value": "DLC" | "DDM" | "UNKNOWN", "authority": "DIRECT" | "CONFIRMED" | "UNKNOWN" }
+--   }
+--
+-- ORDRE DE DÉPLOIEMENT (obligatoire) :
+--   1. appliquer cette migration (colonne additive) → anciens clients continuent de fonctionner ;
+--   2. vérifier la présence de la colonne ;
+--   3. déployer l'app consciente de la provenance (écrit/lit assertion_provenance) ;
+--   4. vérifier UN write/read forward (autorité préservée après reload).
+-- Ne JAMAIS déployer l'app écrivant assertion_provenance AVANT l'étape 1.
+--
+-- ROLLBACK conceptuel : ALTER TABLE public.items DROP COLUMN IF EXISTS assertion_provenance;
+--   (sans perte de données legacy — la colonne est purement additive).
+
+ALTER TABLE public.items
+  ADD COLUMN IF NOT EXISTS assertion_provenance jsonb;
+
+-- Volontairement : pas de NOT NULL, pas de DEFAULT, pas d'UPDATE de backfill, pas d'index
+-- (aucun consommateur ne filtre encore dessus ; l'ajouter plus tard sera une migration séparée).

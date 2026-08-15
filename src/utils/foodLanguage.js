@@ -231,10 +231,51 @@ export const PRIMITIVES = {
   'yaourt-nature': { image: require('../../assets/dev-preview-food/yaourt-nature.png'), ratio: 1.0887 },
 };
 
+// ── Copie contextuelle (Contextual Voice) — enrichissement non cassant ────────────
+// `displayShort` (nom court d'affichage) + `determiner` (déterminant FR : ce/cet/cette/ces),
+// CURATÉS à la main (aucune devinette / aucune regex sur la terminaison). Sert aux
+// formulations Home (ex. « ET SI ON UTILISAIT CES TOMATES ? »). Champs OPTIONNELS :
+// une primitive non enrichie → pas de champs → la Home retombe sur le fallback universel.
+// Enrichi ici uniquement pour les scénarios QA + priorités courantes (pas les 192).
+const PRIMITIVE_COPY = {
+  'tomates-cerises': { displayShort: 'tomates', determiner: 'ces' },
+  'tomate':          { displayShort: 'tomate', determiner: 'cette' },
+  'courgette':       { displayShort: 'courgette', determiner: 'cette' },
+  'avocat':          { displayShort: 'avocat', determiner: 'cet' },
+  'saumon':          { displayShort: 'saumon', determiner: 'ce' },
+  'saumon-fume':     { displayShort: 'saumon', determiner: 'ce' },
+  'poisson-blanc':   { displayShort: 'poisson', determiner: 'ce' },
+  'poulet-roti':     { displayShort: 'poulet', determiner: 'ce' },
+  'poulet-cru':      { displayShort: 'poulet', determiner: 'ce' },
+  'dinde':           { displayShort: 'dinde', determiner: 'cette' },
+  'jambon':          { displayShort: 'jambon', determiner: 'ce' },
+  'steak-hache':     { displayShort: 'steak', determiner: 'ce' },
+  'viande-hachee':   { displayShort: 'viande', determiner: 'cette' },
+  'lardons':         { displayShort: 'lardons', determiner: 'ces' },
+  'crevettes':       { displayShort: 'crevettes', determiner: 'ces' },
+  'oeufs':           { displayShort: 'œufs', determiner: 'ces' },
+  'mozzarella':      { displayShort: 'mozzarella', determiner: 'cette' },
+  'creme-fraiche':   { displayShort: 'crème', determiner: 'cette' },
+  'lait-entier':     { displayShort: 'lait', determiner: 'ce' },
+  'yaourt-nature':   { displayShort: 'yaourt', determiner: 'ce' },
+  'salade':          { displayShort: 'salade', determiner: 'cette' },
+  'salade-verte':    { displayShort: 'salade', determiner: 'cette' },
+  'epinards':        { displayShort: 'épinards', determiner: 'ces' },
+  'brocoli':         { displayShort: 'brocoli', determiner: 'ce' },
+  'champignons':     { displayShort: 'champignons', determiner: 'ces' },
+  'poivron-rouge':   { displayShort: 'poivron', determiner: 'ce' },
+  'concombre':       { displayShort: 'concombre', determiner: 'ce' },
+  'carottes':        { displayShort: 'carottes', determiner: 'ces' },
+  'citron':          { displayShort: 'citron', determiner: 'ce' },
+  'pomme':           { displayShort: 'pomme', determiner: 'cette' },
+  'poire':           { displayShort: 'poire', determiner: 'cette' },
+};
+
 // Lookup explicite par identité canonique. Renvoie null si la clé n'existe pas.
+// Fusionne la copie contextuelle (displayShort/determiner) quand elle existe.
 export function getPrimitive(key) {
   const p = key && PRIMITIVES[key];
-  return p ? { key, image: p.image, ratio: p.ratio } : null;
+  return p ? { key, image: p.image, ratio: p.ratio, ...(PRIMITIVE_COPY[key] || {}) } : null;
 }
 
 // ── Résolution déterministe nom → primitive ──

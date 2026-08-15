@@ -6,7 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
-import { Camera, ChevronLeft, ChevronRight, RefreshCw, Scan, FileText, CheckCircle2, ShieldCheck, X, Lightbulb, Image as ImageIcon, Sparkles } from 'lucide-react-native';
+import { Camera, ChevronLeft, ChevronRight, RefreshCw, Scan, FileText, CheckCircle2, ShieldCheck, X, Lightbulb, Image as ImageIcon, Sparkles, Pencil } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
 import { SUPABASE_KEY } from '../config/supabase';
 import { posthog } from '../config/posthog';
@@ -18,6 +18,7 @@ import { searchSpoonacular } from '../api/spoonacular';
 import { searchOpenFoodFacts, searchImageByName } from '../api/openfoodfacts';
 import { searchProductCache, saveProductCache } from '../api/productCache';
 import { mergeProductData } from '../utils/product';
+import { buildAssertionProvenance, CAPTURE_METHOD, PROV_DATE_TYPE } from '../utils/captureProvenance';
 import { styles } from '../styles';
 import * as Haptics from 'expo-haptics';
 
@@ -194,6 +195,11 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
   const [selectedIds, setSelectedIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [packUnits, setPackUnits] = useState(1);
+  // N6-08 : suivi de l'INTERACTION explicite (pas la valeur) pour bâtir la provenance au save.
+  // packUnitsTouched=false + packUnits=1 → quantité UNKNOWN ; touché → assertion DIRECT (KNOWN).
+  const [packUnitsTouched, setPackUnitsTouched] = useState(false);
+  // Type de date EXPLICITE choisi par l'utilisateur (sinon UNKNOWN — jamais déduit).
+  const [dateTypeChoice, setDateTypeChoice] = useState(undefined);
 
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
@@ -250,13 +256,15 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     const formatted = formatDlcInput(raw);
     const days = parseDlc(formatted);
     setReceiptData(prev => ({ ...prev, items: prev.items.map(p =>
-      p._id === id ? { ...p, dlcInput: formatted, days_left: days !== null ? days : p.days_left } : p
+      // N6-08 : `_dateTouched` = saisie EXPLICITE de la date par l'utilisateur → dateValue DIRECT.
+      p._id === id ? { ...p, dlcInput: formatted, days_left: days !== null ? days : p.days_left, _dateTouched: true } : p
     )}));
   };
 
   const updateReceiptQuantity = (id, delta) => {
     setReceiptData(prev => ({ ...prev, items: prev.items.map(p =>
-      p._id === id ? { ...p, quantity: Math.max(1, (p.quantity || 1) + delta) } : p
+      // N6-08 : `_qtyTouched` = interaction EXPLICITE avec le compteur → quantité DIRECT (KNOWN).
+      p._id === id ? { ...p, quantity: Math.max(1, (p.quantity || 1) + delta), _qtyTouched: true } : p
     )}));
   };
 
@@ -288,6 +296,14 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
       nutri_grade: null,
       consumed: false,
       price: p.unit_price || null,
+      // N6-08 : quantité DIRECT seulement si compteur touché ; date DIRECT si saisie (le ticket ne
+      // pré-remplit pas de date → pas de cas machine). Pas de type (pas de sélecteur ici). Prix
+      // (unit_price) reste une source séparée — n'autorise AUCUN montant Rescue (§41).
+      assertion_provenance: buildAssertionProvenance({
+        captureMethod: CAPTURE_METHOD.RECEIPT,
+        quantityTouched: !!p._qtyTouched,
+        dateEnteredByUser: !!p._dateTouched,
+      }),
     }));
     const savedUnits = rows.map(r => r.total_units || 1);
     const { data, error } = await supabase.from('items').insert(rows).select();
@@ -389,6 +405,16 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
       img_url: result.imgUrl || null,
       barcode: result.barcode || null,
       consumed: false,
+      // N6-08 : provenance forward. Quantité DIRECT (KNOWN) UNIQUEMENT si l'utilisateur a touché le
+      // compteur ; date DIRECT si saisie ; type de date UNIQUEMENT si explicitement choisi. Défaut
+      // non touché → UNKNOWN. Requiert la colonne `assertion_provenance` (migration 20260815) — à
+      // déployer APRÈS la migration. Legacy/anciens clients : colonne absente → dégradation UNKNOWN.
+      assertion_provenance: buildAssertionProvenance({
+        captureMethod: result.source === 'Manuel' ? CAPTURE_METHOD.MANUAL : CAPTURE_METHOD.BARCODE,
+        quantityTouched: packUnitsTouched,
+        dateEnteredByUser: !!dlcInput,
+        dateTypeChoice,
+      }),
     };
     const { data, error } = await supabase.from('items').insert(newItem).select().single();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder le produit.'); return; }
@@ -451,13 +477,15 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     const formatted = formatDlcInput(raw);
     const days = parseDlc(formatted);
     setDetectedProducts(prev => prev.map(p =>
-      p._id === id ? { ...p, dlcInput: formatted, days_left: days !== null ? days : p.days_left } : p
+      // N6-08 : édition explicite de la date IA → dateValue DIRECT (sinon date IA = machine DERIVED).
+      p._id === id ? { ...p, dlcInput: formatted, days_left: days !== null ? days : p.days_left, _dateTouched: true } : p
     ));
   };
 
   const updateProductQuantity = (id, delta) => {
     setDetectedProducts(prev => prev.map(p =>
-      p._id === id ? { ...p, quantity: Math.max(1, (p.quantity || 1) + delta) } : p
+      // N6-08 : interaction explicite compteur → quantité DIRECT (KNOWN) ; sinon défaut/IA = UNKNOWN.
+      p._id === id ? { ...p, quantity: Math.max(1, (p.quantity || 1) + delta), _qtyTouched: true } : p
     ));
   };
 
@@ -480,6 +508,15 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
       days_left: parseDlc(p.dlcInput) !== null ? parseDlc(p.dlcInput) : (p.days_left || 30),
       nutri_grade: null,
       consumed: false,
+      // N6-08 : quantité DIRECT seulement si compteur touché ; date DIRECT si éditée, sinon la date
+      // IA (p.dlc) reste MACHINE (DERIVED) → non promue en autorité DATE. Pas de type (pas de
+      // sélecteur ici). Requiert la colonne assertion_provenance (déployer APRÈS la migration).
+      assertion_provenance: buildAssertionProvenance({
+        captureMethod: CAPTURE_METHOD.PHOTO,
+        quantityTouched: !!p._qtyTouched,
+        dateEnteredByUser: !!p._dateTouched,
+        dateFromMachine: !p._dateTouched && !!p.dlc,
+      }),
     }));
     const { data, error } = await supabase.from('items').insert(rows).select();
     if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder.'); setSaving(false); return; }
@@ -528,6 +565,17 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
       color: '#E6A23C', iconBg: '#FEF6E7', badgeBg: '#FEF3DC', featureBg: '#FEF6E7',
       pro: !isPro,
     },
+    {
+      // N6-08 (CR-19) : représentation de BASE directe et GRATUITE — nom seul suffit, sans scan,
+      // sans échec de lookup, sans IA/OCR, sans premium. Entrée de première classe (avant : seulement
+      // atteignable après un code-barres non trouvé).
+      id: 'manual', Icon: Pencil,
+      title: 'Saisir manuellement', badge: 'GRATUIT',
+      description: "Ajoute un produit avec juste son nom. Tu peux préciser date et quantité si tu veux.",
+      feature: 'Nom seul suffisant',
+      color: C.t2, iconBg: '#F0F0F0', badgeBg: `${C.green}18`, featureBg: '#F5F5F5',
+      pro: false,
+    },
   ];
 
   const handleMethodPress = (id) => {
@@ -537,6 +585,12 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
     else if (id === 'receipt') {
       if (isPro || receiptFree) { setMode('receipt'); }
       else { onPaywall?.(); }
+    }
+    // N6-08 (CR-19) : saisie manuelle DIRECTE — préremplit un résultat « Manuel » et ouvre la
+    // fiche (nom seul), sans caméra ni lookup. `manualDirect` neutralise la copie « non trouvé ».
+    else if (id === 'manual') {
+      setResult({ source: 'Manuel', name: 'Produit', emoji: '🛒', days: 30, barcode: null, category: '', manualDirect: true });
+      setMode('scanner');
     }
   };
 
@@ -658,7 +712,8 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
 
   // ── BARCODE SCANNER ───────────────────────────────────────────────────────────
   if (mode === 'scanner') {
-    if (!permission?.granted) return (
+    // N6-08 : une saisie manuelle directe préremplit `result` → pas besoin de la caméra.
+    if (!permission?.granted && !result) return (
       <SafeAreaView style={[styles.safe, { alignItems: 'center', justifyContent: 'center', padding: 30 }]}>
         <Text style={{ fontSize: 18, fontWeight: '700', color: C.t1, marginBottom: 12, textAlign: 'center' }}>
           Accès caméra requis
@@ -685,7 +740,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
             {result.source === 'Manuel' ? (
               <View style={{ width: '100%', marginBottom: 8 }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: C.t3, marginBottom: 8, textAlign: 'center' }}>
-                  Code-barres non trouvé — entre le nom manuellement
+                  {result.manualDirect ? 'Entre le nom du produit' : 'Code-barres non trouvé — entre le nom manuellement'}
                 </Text>
                 <TextInput
                   value={manualName}
@@ -726,7 +781,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
           </View>
 
           <View style={[styles.card, { padding: 16, marginBottom: 12 }]}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: C.t3, marginBottom: 10 }}>DATE LIMITE (DLC)</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.t3, marginBottom: 10 }}>DATE INDIQUÉE</Text>
             <TouchableOpacity onPress={() => openDlcScan('scanner')}
               style={{ backgroundColor: C.yellow, padding: 13, borderRadius: 12,
                 alignItems: 'center', marginBottom: 10, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
@@ -754,10 +809,32 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
             {!dlcInput && <Text style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>Optionnel — estimation auto sinon</Text>}
           </View>
 
+          {/* N6-08 : type de date OPTIONNEL — seulement si une date est saisie. Défaut « Je ne sais
+              pas » (UNKNOWN). Aucun choix imposé, aucun écran/modale. Un type connu n'active NI
+              notification NI urgence forte (allowlists downstream vides) — capture ≠ autorisation. */}
+          {!!dlcInput && (
+            <View style={[styles.card, { padding: 16, marginBottom: 12 }]}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: C.t3, marginBottom: 10 }}>TYPE DE DATE</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[{ k: undefined, label: 'Je ne sais pas' }, { k: PROV_DATE_TYPE.DLC, label: 'DLC' }, { k: PROV_DATE_TYPE.DDM, label: 'DDM' }].map(opt => {
+                  const active = dateTypeChoice === opt.k;
+                  return (
+                    <TouchableOpacity key={opt.label} onPress={() => setDateTypeChoice(opt.k)}
+                      style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
+                        backgroundColor: active ? `${C.green}18` : '#FAFAFA',
+                        borderWidth: 1.5, borderColor: active ? C.green : C.border }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: active ? C.green : C.t2 }}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <View style={[styles.card, { padding: 16, marginBottom: 12 }]}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: C.t3, marginBottom: 12 }}>QUANTITÉ</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-              <TouchableOpacity onPress={() => setPackUnits(p => Math.max(1, p - 1))}
+              <TouchableOpacity onPress={() => { setPackUnitsTouched(true); setPackUnits(p => Math.max(1, p - 1)); }}
                 style={{ width: 42, height: 42, borderRadius: 13,
                   backgroundColor: packUnits > 1 ? `${C.orange}20` : '#F0F0F0',
                   alignItems: 'center', justifyContent: 'center' }}>
@@ -767,7 +844,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
                 <Text style={{ fontSize: 32, fontWeight: '800', color: C.t1 }}>{packUnits}</Text>
                 <Text style={{ fontSize: 10, color: C.t3 }}>{packUnits > 1 ? 'unités' : 'unité'}</Text>
               </View>
-              <TouchableOpacity onPress={() => setPackUnits(p => Math.min(24, p + 1))}
+              <TouchableOpacity onPress={() => { setPackUnitsTouched(true); setPackUnits(p => Math.min(24, p + 1)); }}
                 style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: `${C.green}20`, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 22, fontWeight: '700', color: C.green, lineHeight: 28 }}>+</Text>
               </TouchableOpacity>
@@ -801,7 +878,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.greenBtn, { backgroundColor: 'transparent', marginTop: 10, flexDirection: 'row', gap: 6 }]}
-            onPress={() => { setResult(null); setScanned(false); setDlcInput(''); setPackUnits(1); setManualName(''); }}>
+            onPress={() => { setResult(null); setScanned(false); setDlcInput(''); setPackUnits(1); setPackUnitsTouched(false); setDateTypeChoice(undefined); setManualName(''); }}>
             <ChevronLeft size={16} color={C.green} strokeWidth={2.5} />
             <Text style={{ color: C.green, fontWeight: '700', fontSize: 15 }}>Scanner un autre</Text>
           </TouchableOpacity>
@@ -883,7 +960,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#92610A' }}>Vérifiez avant d'ajouter</Text>
               <Text style={{ fontSize: 12, color: '#92610A', marginTop: 2, lineHeight: 17 }}>
-                Les emplacements et DLC sont estimés automatiquement — ils peuvent être inexacts. Corrigez-les pour profiter à 100% des alertes et du tri par urgence.
+                Les emplacements et dates sont estimés automatiquement — ils peuvent être inexacts. Corrigez-les pour profiter à 100% des alertes et du tri par urgence.
               </Text>
             </View>
           </View>
@@ -933,7 +1010,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
 
               {/* Row 3 : DLC */}
               <View style={{ backgroundColor: '#F8F9FA', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE LIMITE (DLC)</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE INDIQUÉE</Text>
                 <TouchableOpacity onPress={() => openDlcScan('receipt', p._id, true)}
                   style={{ backgroundColor: C.yellow, padding: 10, borderRadius: 10,
                     alignItems: 'center', marginBottom: 8, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
@@ -1183,7 +1260,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, i
                     </View>
 
                     <View style={{ backgroundColor: '#F8F9FA', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE LIMITE (DLC)</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE INDIQUÉE</Text>
                       <TouchableOpacity onPress={() => openDlcScan('photo', p._id)}
                         style={{ backgroundColor: C.yellow, padding: 10, borderRadius: 10,
                           alignItems: 'center', marginBottom: 8, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
