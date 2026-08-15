@@ -1,9 +1,15 @@
 /**
  * Home — logique produit pure (déterministe, testable, sans JSX).
- * Réutilise la sémantique temporelle canonique de Mon Stock (temporal.js) — aucune
- * palette ni grammaire temporelle parallèle.
+ *
+ * N6-13 (CR-22) : l'attention temporelle de Home consomme UNIQUEMENT l'autorité canonique N6-04
+ * (temporalAuthority), jamais `computeDaysRemaining`/`days_left` brut. Chaque surface est plafonnée à
+ * son NIVEAU d'évidence :
+ *   - HERO (HomePriorityFocus = intervention AMPLIFIÉE : halo + couleur + urgence) → `amplifiedTemporalDays`
+ *     (DATE + type sémantique ∈ allowlist). Allowlist VIDE aujourd'hui → aucun héros temporel réel (silence).
+ *   - WATCH (secondaire, neutre) → `passiveTemporalDays` (DATE ou HEURISTIC ancrée) ; NONE/days_left brut exclu.
+ * On ne dérive JAMAIS l'attention d'un champ technique ni d'une base UNKNOWN.
  */
-import { computeDaysRemaining, getTemporalDescriptor } from './temporal';
+import { amplifiedTemporalDays, passiveTemporalDays } from './temporalAuthority';
 
 // États de Home (Home Master) : A priorité+possibilité · B priorité seule ·
 // C rien ne presse · EMPTY stock inexploitable.
@@ -24,36 +30,36 @@ export function deriveRichnessLevel(items = [], activeMin = ACTIVE_MIN) {
   return HOME_LEVEL.SUFFICIENT;
 }
 
-// Un item est « exploitable » temporellement s'il a des jours connus.
-function withDays(items = []) {
-  return items
-    .map((i) => ({ item: i, days: computeDaysRemaining(i) }))
-    .filter((x) => typeof x.days === 'number');
-}
-
 /**
- * Priorité du moment : UN seul item dominant. Le plus urgent (dépassé puis J0 puis
- * proche) tant qu'il reste dans la fenêtre d'attention (≤ 4 jours). Sinon null (état C).
- * Déterministe, aucune logique par aliment.
+ * Priorité du moment : UN seul item dominant, HERO AMPLIFIÉ. Éligible UNIQUEMENT si l'autorité
+ * AMPLIFIÉE existe (`amplifiedTemporalDays != null` : DATE + type sémantique supporté) ET ≤ 4 jours.
+ * Allowlist des types amplifiés VIDE aujourd'hui → renvoie TOUJOURS null (aucun héros temporel réel).
+ * Déterministe. On ne DOWNGRADE jamais vers strong/passive : le héros est une intervention amplifiée.
  */
-export function selectHomePriority(items = []) {
-  const cand = withDays(items).sort((a, b) => a.days - b.days);
+export function selectHomePriority(items = [], now = new Date()) {
+  const cand = items
+    .map((i) => ({ item: i, days: amplifiedTemporalDays(i, now) }))
+    .filter((x) => typeof x.days === 'number')
+    .sort((a, b) => a.days - b.days);
   if (!cand.length) return null;
   const top = cand[0];
   return top.days <= 4 ? top.item : null;
 }
 
 /**
- * À garder à l'œil : jusqu'à 2 items proches (0–7 j), hors priorité et hors gathering,
- * secondaires. Ne rivalise jamais avec la priorité.
+ * À garder à l'œil : jusqu'à 2 items proches (0–7 j), hors priorité et hors gathering, SECONDAIRES et
+ * NEUTRES. Éligibilité via `passiveTemporalDays` (DATE ou HEURISTIC ancrée) — jamais `days_left` brut /
+ * autorité NONE. Chaque item porte `watchDays` (jour passif autoritaire) pour un affichage neutre côté
+ * composant, sans recalcul d'autorité. Ne rivalise jamais avec la priorité (aucune couleur d'alerte).
  */
-export function selectWatchItems(items = [], priority = null, gathering = []) {
+export function selectWatchItems(items = [], priority = null, gathering = [], now = new Date()) {
   const excl = new Set([priority?.id, ...gathering.map((g) => g?.id)].filter(Boolean));
-  return withDays(items)
-    .filter((x) => x.days >= 0 && x.days <= 7 && !excl.has(x.item.id))
+  return items
+    .map((i) => ({ item: i, days: passiveTemporalDays(i, now) }))
+    .filter((x) => typeof x.days === 'number' && x.days >= 0 && x.days <= 7 && !excl.has(x.item.id))
     .sort((a, b) => a.days - b.days)
     .slice(0, 2)
-    .map((x) => x.item);
+    .map((x) => ({ ...x.item, watchDays: x.days }));
 }
 
 export function deriveHomeState(items = [], priority = null, best = null) {
@@ -68,17 +74,19 @@ export function deriveHomeState(items = [], priority = null, best = null) {
  */
 // Constructions volontairement sans accord de verbe/pronom sur le nom du produit
 // (le nom vient en fin) → robustes au singulier comme au pluriel, sans moteur grammatical.
-export function deriveVoice(state, priority, items = []) {
+export function deriveVoice(state, priority, items = [], now = new Date()) {
   if (state === HOME_STATE.EMPTY) return 'Ajoute quelques produits pour que Frigy puisse t’aider.';
-  if (state === HOME_STATE.C) return 'Rien ne presse aujourd’hui.';
+  // N6-13 (2.6, CR-22) : État C = aucun héros amplifié. Ce n'est PAS une preuve de calme global
+  // (la complétude temporelle du foyer n'est pas modélisée) → SILENCE, jamais « Rien ne presse ».
+  if (state === HOME_STATE.C) return '';
   if (!priority) return '';
-  const days = computeDaysRemaining(priority);
-  // Master : la voix cadre le MOMENT sans nommer le produit ni répéter le hero (qui,
-  // lui, donne nom + « c'est le bon moment » + « Aujourd'hui »). Accord porté par
-  // « produit(s) », jamais par le nom de l'aliment → aucune grammaire par aliment.
+  // N6-13 : la voix temporelle est une revendication d'attention → elle exige l'autorité AMPLIFIÉE
+  // (même palier que le héros). Source = `amplifiedTemporalDays`, jamais `computeDaysRemaining`. La
+  // voix n'apparaît qu'avec une priorité (elle-même amplifiée) → cohérence garantie.
+  const days = amplifiedTemporalDays(priority, now);
   if (typeof days === 'number' && days < 0) return 'Un produit est à vérifier en priorité aujourd’hui.';
   const bonMoment = items.filter((i) => {
-    const d = computeDaysRemaining(i);
+    const d = amplifiedTemporalDays(i, now);
     return typeof d === 'number' && d >= 0 && d <= 1;
   }).length;
   if (typeof days === 'number' && days <= 1) {
@@ -103,12 +111,13 @@ export function transformationOverline(priority) {
 }
 
 // Micro-copie sous le nom du hero (Home Master) — agreement-free (ni verbe accordé ni pronom).
+// N6-13 : lit le jour AUTORITAIRE amplifié porté par l'objet priorité (`attentionDays`, attaché par la
+// couche de sélection). Ne recalcule PAS l'autorité, ne lit AUCUN champ technique brut. N'est consommée
+// que pour un héros amplifié-autorisé (garanti par le contrat d'appel).
 export function priorityMicroCopy(priority) {
-  const days = computeDaysRemaining(priority);
+  const days = priority?.attentionDays;
   if (typeof days !== 'number') return '';
   if (days < 0) return 'À vérifier en priorité.';
   if (days === 0) return 'C’est le bon moment.';
   return 'Bientôt à utiliser.';
 }
-
-export { getTemporalDescriptor };

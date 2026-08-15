@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { resolveFoodImage } from '../../utils/foodLanguage';
-import { computeDaysRemaining, getTemporalDescriptor, getTemporalColorKey } from '../../utils/temporal';
+import { getTemporalDescriptor, getTemporalColorKey } from '../../utils/temporal';
 import { priorityMicroCopy } from '../../utils/homeLogic';
 import { formatEuro, rescueValueSpokenLabel } from '../../utils/rescueValue';
 
@@ -10,7 +10,10 @@ import { formatEuro, rescueValueSpokenLabel } from '../../utils/rescueValue';
 // focusGlowPriority (lecture seule) ; ne modifie pas le Natural Focus de Mon Stock.
 export default function HomePriorityFocus({ item, theme, fonts, onPress }) {
   if (!item) return null;
-  const days = computeDaysRemaining(item);
+  // N6-13 : le héros est AMPLIFIÉ-gaté par la couche de sélection ; il consomme le jour AUTORITAIRE
+  // amplifié porté par l'objet (`attentionDays`), jamais `computeDaysRemaining`/champ brut. La couleur
+  // d'alerte + le halo sont donc légitimes (évidence amplifiée présente à ce point).
+  const days = item.attentionDays;
   const descriptor = getTemporalDescriptor(days);
   const colorKey = getTemporalColorKey(days);
   const accent = theme[colorKey] || theme.text2;

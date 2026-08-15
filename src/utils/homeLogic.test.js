@@ -18,12 +18,13 @@ function load(file, transforms) {
   return m.exports;
 }
 
-// homeLogic : stub temporal (computeDaysRemaining lit days_left).
+// homeLogic : stub des helpers d'autorité N6-04 SANS toucher l'allowlist réelle. Les items de test
+// portent `__amp` (jour amplifié) et `__pass` (jour passif) → on contrôle chaque palier indépendamment.
+// `days_left` seul (sans __amp/__pass) modélise le legacy brut d'autorité NONE (exclu partout).
 const logic = load('homeLogic.js', (c) =>
-  c.replace(/import \{[^}]*\} from '\.\/temporal';/,
-      "const computeDaysRemaining=(i)=>(typeof i.days_left==='number'?i.days_left:null);const getTemporalDescriptor=(d)=>String(d);")
-   .replace(/export \{ getTemporalDescriptor \};/, '')
-   + '\nmodule.exports={HOME_STATE,HOME_LEVEL,selectHomePriority,selectWatchItems,deriveHomeState,deriveVoice,deriveRichnessLevel};');
+  c.replace(/import \{[^}]*\} from '\.\/temporalAuthority';/,
+      "const amplifiedTemporalDays=(i)=>(typeof i.__amp==='number'?i.__amp:null);const passiveTemporalDays=(i)=>(typeof i.__pass==='number'?i.__pass:null);")
+   + '\nmodule.exports={HOME_STATE,HOME_LEVEL,selectHomePriority,selectWatchItems,deriveHomeState,deriveVoice,deriveRichnessLevel,priorityMicroCopy};');
 
 // ingredientIdentity : résolveur canonique N6-05 (pur, aucun import) — injecté dans homeRecipes
 // (dont les imports sont strippés) pour tester la VRAIE convergence identité, pas un stub.
@@ -37,17 +38,41 @@ const recipes = load('homeRecipes.js', (c) =>
    + `\nconst resolveIngredientIdentity=${identity.resolveIngredientIdentity.toString()};`
    + '\nmodule.exports={calculateROI,selectBestHomeRecipe,deriveGatheringItems};');
 
-const { selectHomePriority, deriveHomeState, HOME_STATE, HOME_LEVEL, deriveRichnessLevel } = logic;
+const { selectHomePriority, selectWatchItems, deriveHomeState, HOME_STATE, HOME_LEVEL, deriveRichnessLevel, priorityMicroCopy, deriveVoice } = logic;
 const { selectBestHomeRecipe, calculateROI } = recipes;
 
 let pass = 0, fail = 0;
 const ok = (label, cond) => { if (cond) pass++; else { fail++; console.log('FAIL ' + label); } };
 
-// selectHomePriority : le plus urgent dans la fenêtre ≤4 ; null si tout est loin.
-ok('priority = plus urgent', selectHomePriority([{ id: 'a', name: 'X', days_left: 2 }, { id: 'b', name: 'Y', days_left: 0 }])?.id === 'b');
-ok('priority null si tout >4', selectHomePriority([{ id: 'a', name: 'X', days_left: 40 }]) === null);
-ok('priority inclut overdue', selectHomePriority([{ id: 'a', name: 'X', days_left: -1 }, { id: 'b', name: 'Y', days_left: 3 }])?.id === 'a');
+// ── N6-13 : HÉRO = palier AMPLIFIÉ uniquement (amplifiedTemporalDays). Legacy brut/UNKNOWN → jamais héros ──
+// T1 legacy brut : days_left ≤ 4 mais aucune autorité amplifiée → PAS de héros.
+ok('T1 legacy days_left≤4 (autorité NONE) → priority null', selectHomePriority([{ id: 'a', name: 'X', days_left: 2 }]) === null);
+// T5 amplifié (synthétique, allowlist réelle NON modifiée) : le plus urgent dans ≤4.
+ok('T5 amplifié = plus urgent', selectHomePriority([{ id: 'a', __amp: 2 }, { id: 'b', __amp: 0 }])?.id === 'b');
+ok('T5 amplifié null si tout >4', selectHomePriority([{ id: 'a', __amp: 40 }]) === null);
+ok('T5 amplifié inclut overdue', selectHomePriority([{ id: 'a', __amp: -1 }, { id: 'b', __amp: 3 }])?.id === 'a');
+// T4 STRONG sans amplifié : un item passif/fort (pas __amp) ne devient JAMAIS héros.
+ok('T4 passif/fort sans amplifié → priority null', selectHomePriority([{ id: 'a', __pass: 1 }]) === null);
 ok('priority [] → null', selectHomePriority([]) === null);
+
+// ── N6-13 : WATCH = palier PASSIF (passiveTemporalDays), 0–7 j ; legacy brut/UNKNOWN exclu ──
+ok('WATCH passif dans 0–7 inclus', selectWatchItems([{ id: 'a', __pass: 5 }]).some((x) => x.id === 'a'));
+ok('WATCH legacy brut (days_left seul) EXCLU', selectWatchItems([{ id: 'a', days_left: 3 }]).length === 0);
+ok('WATCH >7 exclu', selectWatchItems([{ id: 'a', __pass: 9 }]).length === 0);
+ok('WATCH exclut la priorité', selectWatchItems([{ id: 'a', __pass: 2 }], { id: 'a' }).length === 0);
+ok('WATCH porte watchDays autoritaire', selectWatchItems([{ id: 'a', __pass: 4 }])[0].watchDays === 4);
+ok('WATCH plafonné à 2', selectWatchItems([{ id: 'a', __pass: 1 }, { id: 'b', __pass: 2 }, { id: 'c', __pass: 3 }]).length === 2);
+
+// ── priorityMicroCopy : lit le jour amplifié PORTÉ (attentionDays), jamais un champ brut ──
+ok('MICRO attentionDays<0 → « À vérifier en priorité »', priorityMicroCopy({ attentionDays: -1 }) === 'À vérifier en priorité.');
+ok('MICRO attentionDays 0 → « C’est le bon moment »', priorityMicroCopy({ attentionDays: 0 }) === 'C’est le bon moment.');
+ok('MICRO sans attentionDays → vide (jamais dérivé d’un brut)', priorityMicroCopy({ days_left: 2 }) === '');
+
+// ── N6-13 (2.6) : État C (aucun héros amplifié) = SILENCE, jamais de calme global fabriqué ──
+ok('C4 deriveVoice(C) → silence (chaine vide)', deriveVoice(HOME_STATE.C, null, [{ id: 'a', __pass: 3 }]) === '');
+ok('C4bis deriveVoice(C) ne dit jamais « Rien ne presse »', deriveVoice(HOME_STATE.C, null, []) !== 'Rien ne presse aujourd’hui.');
+// EMPTY conserve son invite (état à autorité propre : foyer connu vide).
+ok('EMPTY voice conservée (invite, autorité connue)', deriveVoice(HOME_STATE.EMPTY, null, []) !== '');
 
 // deriveHomeState : EMPTY / C / B / A.
 ok('state EMPTY', deriveHomeState([], null, null) === HOME_STATE.EMPTY);

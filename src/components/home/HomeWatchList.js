@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { resolveFoodImage } from '../../utils/foodLanguage';
-import { computeDaysRemaining, getTemporalDescriptor, getTemporalColorKey } from '../../utils/temporal';
+import { getTemporalDescriptor } from '../../utils/temporal';
 
 // « À garder à l'œil » — zone SECONDAIRE (≤2). Compact, sans Natural Focus, sans card
 // dominante, jamais InventoryProductRow. Prépare mentalement la suite.
@@ -15,9 +15,12 @@ export default function HomeWatchList({ items = [], theme, fonts, onItemPress })
         À GARDER À L’ŒIL
       </Text>
       {items.map((it, idx) => {
-        const days = computeDaysRemaining(it);
+        // N6-13 : plafond PASSIF. Jour AUTORITAIRE passif porté par l'item (`watchDays`, DATE/HEURISTIC ;
+        // NONE/brut déjà exclu par selectWatchItems). Descripteur neutre (plage 0–7 → jamais « dépassé »).
+        // Puce NEUTRE (theme.text4) — AUCUNE couleur d'alerte (critical/attention) sur une évidence passive.
+        const days = it.watchDays;
         const descriptor = getTemporalDescriptor(days);
-        const dot = theme[getTemporalColorKey(days)] || theme.text4;
+        const dot = theme.text4;
         const prim = resolveFoodImage(it);
         return (
           <TouchableOpacity key={it.id || it.name} activeOpacity={0.7} onPress={() => onItemPress?.(it)}

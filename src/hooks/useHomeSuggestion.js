@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadHomeRecipeCache, refreshHomeRecipes, selectBestHomeRecipe, deriveGatheringItems, resolveRecipeImage } from '../utils/homeRecipes';
 import { selectHomePriority, selectWatchItems, deriveHomeState, deriveVoice, deriveRichnessLevel, HOME_STATE, HOME_LEVEL } from '../utils/homeLogic';
+import { amplifiedTemporalDays } from '../utils/temporalAuthority';
 import { resolveFoodImage } from '../utils/foodLanguage';
 import { computeRescueValue } from '../utils/rescueValue';
 
@@ -53,8 +54,10 @@ export default function useHomeSuggestion(items = [], opts = {}) {
     const pMeta = priorityRaw ? resolveFoodImage(priorityRaw) : null;
     // rescueValue = valeur POTENTIELLE à sauver (jamais « sauvée ») — calculée sur l'item
     // brut, portée par le bloc priorité (Hero). null si aucune estimation fiable.
+    // N6-13 : porte le jour AUTORITAIRE amplifié (`attentionDays`) sur l'objet priorité → le héros et sa
+    // micro-copie l'affichent sans recalculer l'autorité ni lire un champ technique brut.
     const priority = priorityRaw
-      ? { ...priorityRaw, determiner: pMeta?.determiner, displayShort: pMeta?.displayShort, rescueValue: computeRescueValue(priorityRaw) }
+      ? { ...priorityRaw, attentionDays: amplifiedTemporalDays(priorityRaw), determiner: pMeta?.determiner, displayShort: pMeta?.displayShort, rescueValue: computeRescueValue(priorityRaw) }
       : null;
     const best = recipes && recipes.length ? selectBestHomeRecipe(recipes, items, priority) : null;
     const gatheringItems = deriveGatheringItems(best, priority);

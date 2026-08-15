@@ -18,7 +18,7 @@ import HomeLowStock from '../components/home/HomeLowStock';
 // Home — point de décision domestique (Home Master V1.2). Cycle : Prioriser → Relier →
 // Transformer → Compléter. Pas de dashboard, pas de stats, pas de cards empilées :
 // composition, espace, Food Language, Natural Focus (un seul foyer), Contextual Voice.
-export default function HomeScreen({ items = [], profileName, onNav, onItemPress, onShopping, onScan, onConfirmHave, stockFontsLoaded, firstRun = false }) {
+export default function HomeScreen({ items = [], profileName, onNav, onItemPress, onShopping, onScan, onConfirmHave, stockFontsLoaded, firstRun = false, itemsReady = true }) {
   const theme = useStockTheme();
   const fonts = {
     regular: stockFontsLoaded ? 'SourceSans3-Regular' : undefined,
@@ -37,6 +37,10 @@ export default function HomeScreen({ items = [], profileName, onNav, onItemPress
   // FIRST RUN (stock jamais initialisé) : piloté par le scénario QA 'first', ou en prod par
   // la prop `firstRun` (à câbler côté App — voir gap documenté). Distinct de EMPTY_STOCK.
   const isFirstRun = qa ? !!qa.firstRun : !!firstRun;
+  // N6-13 (CR-22) : LISIBILITÉ DU FOYER. Aucune revendication d'état foyer (Empty/LOW/SUFFICIENT/
+  // priorité/watch) tant que le stock n'est pas hydraté pour la famille courante. UNKNOWN ≠ vide/calme.
+  // First Run reste indépendant (piloté par stockInitialized). Les scénarios QA (dev) sont « prêts ».
+  const ready = qa ? true : itemsReady;
   // isDark → thème clair (White) réchauffe l'image de résultat (variante warm en cache) ;
   // Dark reste neutre. Voir useHomeSuggestion → resolveRecipeImage.
   const overrideOpts = useMemo(
@@ -83,6 +87,14 @@ export default function HomeScreen({ items = [], profileName, onNav, onItemPress
         {isFirstRun ? (
           /* FIRST RUN HOME — hero + mascotte + histoire + action. Top Bar/Nav inchangés. */
           <HomeFirstRun firstName={firstName} theme={theme} fonts={fonts} onAddProducts={onScan} />
+        ) : !ready ? (
+          /* NOT READY (foyer non hydraté / échec de fetch) — état NEUTRE non-assertif : greeting seul,
+             aucune revendication d'état foyer (ni « vide », ni « rien ne presse », ni priorité/watch). */
+          <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+            <Text style={{ fontFamily: 'Georgia', fontSize: 34, fontWeight: '600', letterSpacing: -0.34, lineHeight: 40, color: theme.text1 }}>
+              {firstName ? `Bonjour ${firstName}` : 'Bonjour'}
+            </Text>
+          </View>
         ) : level === HOME_LEVEL.EMPTY ? (
           /* EMPTY_STOCK — utilisateur DÉJÀ initialisé, stock redevenu vide (≠ First Run). Sans mascotte. */
           <HomeEmptyStock firstName={firstName} theme={theme} fonts={fonts} />
@@ -112,17 +124,13 @@ export default function HomeScreen({ items = [], profileName, onNav, onItemPress
             onConfirmHave={qa ? undefined : onConfirmHave} />
         ) : (
         <>
-        {/* ─── SUFFICIENT = HOME ACTIVE (inchangée) ─── */}
-        {/* ─── ÉTAT C : rien ne presse (calme) ─── */}
+        {/* ─── SUFFICIENT = HOME ACTIVE ─── */}
+        {/* ─── ÉTAT C : aucun héros amplifié autorisé. N6-13 (2.6, CR-22) : « priorité absente » ≠
+            « rien ne demande d'attention ». Frigy ne modélise pas la complétude temporelle du foyer →
+            il ne PEUT PAS prouver un calme global. Aucune revendication de calme : SILENCE. Le greeting
+            (au-dessus) reste ; la WatchList NEUTRE peut s'afficher (autorité passive déjà acceptée). ── */}
         {state === HOME_STATE.C && (
-          <>
-            <View style={{ alignItems: 'center', paddingTop: 40, paddingHorizontal: 32, marginBottom: 8 }}>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text3, textAlign: 'center', lineHeight: 20 }}>
-                Rien ne demande ton attention pour le moment. Profites-en.
-              </Text>
-            </View>
-            <HomeWatchList items={watchItems} theme={theme} fonts={fonts} onItemPress={onItemPress} />
-          </>
+          <HomeWatchList items={watchItems} theme={theme} fonts={fonts} onItemPress={onItemPress} />
         )}
 
         {/* ─── ÉTATS A / B : priorité du moment ─── */}
