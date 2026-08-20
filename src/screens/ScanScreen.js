@@ -70,7 +70,17 @@ const PHOTO_METHODS_CONFIG = [
 
 const RECEIPT_FREE_KEY = 'frigy_receipt_free_used';
 
-export default function ScanScreen({ onClose, setItems, items, user, familyId, entitlement, onPaywall, onRetryEntitlement, countReady }) {
+// N6-15 — DISCRIMINATEUR HANDOFF COURSES. Un contexte Courses VALIDE se reconnaît à son CONTRAT
+// sémantique (lineage.kind === 'COURSES' + identifiants requis), jamais à la simple présence d'un objet
+// captureContext. Sert à router directement vers le formulaire manuel canonique ET à fermer le sélecteur
+// générique (fail-closed) tant qu'une identité Courses est vivante → aucune contamination inter-méthode.
+export const isCoursesContext = (ctx) => !!(
+  ctx && ctx.lineage && ctx.lineage.kind === 'COURSES'
+  && ctx.deterministicItemId && ctx.shoppingItemId && ctx.sourceName
+);
+
+export default function ScanScreen({ onClose, setItems, items, user, familyId, entitlement, onPaywall, onRetryEntitlement, countReady,
+  captureContext = null, onCaptureContextConsumed, onStockCommitted }) {
   const isPro = isProStatus(entitlement);
   // N6-11 : feedback neutre quand l'autorité d'entitlement n'est pas établie (UNKNOWN → vérification ;
   // ERROR → réessai via refresh). JAMAIS « Free », JAMAIS paywall sous incertitude.
@@ -94,7 +104,9 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
     else onPaywall?.();
     return true;
   };
-  const [mode, setMode] = useState('choice');
+  // N6-15 §5 — routage dérivé DÈS le premier rendu : un contexte Courses valide démarre en 'scanner'
+  // (fiche manuelle canonique), jamais en 'choice' → le sélecteur générique n'est jamais actionnable.
+  const [mode, setMode] = useState(() => isCoursesContext(captureContext) ? 'scanner' : 'choice');
   const [receiptFreeUsed, setReceiptFreeUsed] = useState(false);
 
   useEffect(() => {
@@ -103,9 +115,11 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(() => isCoursesContext(captureContext)
+    ? { source: 'Manuel', name: 'Produit', emoji: '🛒', days: 30, barcode: null, category: '', manualDirect: true }
+    : null);
   const [location, setLocation] = useState('Frigo');
-  const [manualName, setManualName] = useState('');
+  const [manualName, setManualName] = useState(() => isCoursesContext(captureContext) ? captureContext.sourceName : '');
   const [imgError, setImgError] = useState(false);
 
   const handleScanImgError = async () => {
@@ -224,6 +238,21 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
   const [packUnitsTouched, setPackUnitsTouched] = useState(false);
   // Type de date EXPLICITE choisi par l'utilisateur (sinon UNKNOWN — jamais déduit).
   const [dateTypeChoice, setDateTypeChoice] = useState(undefined);
+
+  // N6-15 — HANDOFF COURSES : demande à App de libérer le contexte (anti-fuite vers une capture
+  // ultérieure sans rapport). Idempotent : ne signale que si un contexte est réellement présent.
+  const consumeCourseCtx = () => { if (captureContext) onCaptureContextConsumed?.(); };
+
+  // N6-15 — PRÉREMPLISSAGE : un contexte Courses ouvre automatiquement le formulaire manuel canonique
+  // avec le NOM prérempli. AUCUNE mutation `items` ici — l'insert exige toujours le CTA final explicite.
+  // Quantité/emplacement/date restent visibles & éditables ; la quantité Courses n'est PAS transférée.
+  useEffect(() => {
+    if (!isCoursesContext(captureContext)) return;
+    setManualName(captureContext.sourceName);
+    setResult({ source: 'Manuel', name: 'Produit', emoji: '🛒', days: 30, barcode: null, category: '', manualDirect: true });
+    setLocation('Frigo'); setDlcInput(''); setPackUnits(1); setPackUnitsTouched(false); setDateTypeChoice(undefined);
+    setMode('scanner');
+  }, [captureContext]);
 
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
@@ -447,8 +476,40 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
         dateTypeChoice,
       }),
     };
+    // N6-15 : handoff Courses → id `items` DÉTERMINISTE (idempotence DURE via PK) + LIGNÉE (origine,
+    // JAMAIS autorité). Sans contexte Courses → writer ordinaire STRICTEMENT inchangé (id serveur aléatoire).
+    const ctx = captureContext;
+    if (ctx?.deterministicItemId) {
+      newItem.id = ctx.deterministicItemId;
+      if (ctx.lineage) newItem.assertion_provenance.lineage = ctx.lineage;
+    }
     const { data, error } = await supabase.from('items').insert(newItem).select().single();
-    if (error) { Alert.alert('Erreur', 'Impossible de sauvegarder le produit.'); return; }
+    if (error) {
+      // Reprise idempotente : la ligne Stock déterministe existe déjà (23505). Ce n'est un succès QUE si
+      // la LIGNÉE (foyer + origine COURSES + même shoppingItemId) le prouve — sinon échec FERMÉ (pas de
+      // faux succès, pas de cleanup Courses). On ne MODIFIE jamais la ligne existante (CR-07 non réintroduit).
+      if (ctx?.deterministicItemId && error.code === '23505') {
+        const { data: existing } = await supabase.from('items')
+          .select('family_id, assertion_provenance').eq('id', ctx.deterministicItemId).maybeSingle();
+        const lin = existing && existing.assertion_provenance && existing.assertion_provenance.lineage;
+        if (existing && existing.family_id === familyId && lin && lin.kind === 'COURSES' && lin.shoppingItemId === ctx.shoppingItemId) {
+          // La ligne Stock déterministe existante a GAGNÉ la course : elle fait autorité. Les valeurs de CE
+          // 2e formulaire (nom/quantité/emplacement/date éventuellement édités) ne sont PAS appliquées et ne
+          // doivent PAS être revendiquées → message NEUTRE (jamais « <nom édité> rangé »). Aucun UPDATE de la
+          // ligne existante, aucune 2e insertion. Parité T6 : on AWAIT le cleanup Courses et on inspecte son
+          // booléen pour un message véridique (retiré vs non retiré).
+          const cleanupOk = onStockCommitted ? (await onStockCommitted(ctx.shoppingItemId)) === true : false;
+          consumeCourseCtx();
+          Alert.alert('Déjà dans ton stock', cleanupOk
+            ? 'Cet article est déjà dans ton stock. La ligne a été retirée de ta liste de courses.'
+            : 'Cet article est déjà dans ton stock, mais la ligne n\'a pas pu être retirée de ta liste de courses.');
+          onClose(); return;
+        }
+        Alert.alert('Impossible d\'ajouter', 'Un conflit d\'identifiant empêche l\'ajout. Réessaie plus tard.');
+        return;
+      }
+      Alert.alert('Erreur', 'Impossible de sauvegarder le produit.'); return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (result.source === 'Manuel' && manualName.trim() && result.barcode) {
       saveProductCache(result.barcode, {
@@ -462,8 +523,21 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
       category: result.category, location, has_dlc: !!dlcInput,
       source: result.source, quantity: packUnits,
     });
+    // N6-15 : succès Stock canonique CONFIRMÉ → signale le commit (App retentera le cleanup Courses) puis
+    // libère le contexte. Cleanup Courses ≠ preuve d'achat ; il retire seulement l'intention de la liste.
     const locLabel = location === 'Frigo' ? 'le frigo' : location === 'Congélateur' ? 'le congélateur' : 'le placard';
-    Alert.alert('✅ Ajouté !', `${finalName} rangé dans ${locLabel}.`);
+    // N6-15 — Le succès Stock est ÉTABLI et n'est JAMAIS annulé. Pour un contexte Courses on AWAIT le
+    // cleanup et on inspecte son booléen : succès COMPLET vs succès PARTIEL (produit bien en stock, ligne
+    // courses non retirée). Défaut de sûreté : sans callback/résultat exploitable → messagerie PARTIELLE
+    // (jamais de fausse réussite de cleanup). Aucun rollback Stock, aucune modif de la ligne Stock.
+    if (ctx) {
+      const cleanupOk = onStockCommitted ? (await onStockCommitted(ctx.shoppingItemId)) === true : false;
+      consumeCourseCtx();
+      if (cleanupOk) Alert.alert('✅ Ajouté !', `${finalName} rangé dans ${locLabel}.`);
+      else Alert.alert('Ajouté au stock', `${finalName} est bien dans ton stock, mais la ligne n'a pas pu être retirée de ta liste de courses. Tu peux réessayer sans créer de doublon.`);
+    } else {
+      Alert.alert('✅ Ajouté !', `${finalName} rangé dans ${locLabel}.`);
+    }
     onClose();
   };
 
@@ -621,6 +695,9 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
   ];
 
   const handleMethodPress = (id) => {
+    // N6-15 : choisir une méthode manuellement = NOUVELLE capture sans rapport → libère tout contexte
+    // Courses résiduel (jamais de fuite d'id déterministe / lignée vers un ajout indépendant).
+    consumeCourseCtx();
     posthog.capture('scan_started', { method: id });
     if (id === 'barcode') { if (!permission?.granted) requestPermission(); setMode('scanner'); }
     else if (id === 'photo') {
@@ -647,6 +724,21 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
       setMode('scanner');
     }
   };
+
+  // N6-15 §4/§5 — FAIL-CLOSED. Tant qu'une identité Courses VALIDE est vivante et que le routage manuel
+  // n'a pas établi mode='scanner', on n'affiche JAMAIS un sélecteur d'acquisition actionnable
+  // (ticket/code-barres/photo). En pratique inatteignable (mode démarre 'scanner'), mais si une régression
+  // future laissait un mode non-scanner, on ferme au lieu d'exposer les méthodes → zéro contamination
+  // inter-méthode de l'id déterministe / lineage Courses. On ne vide PAS silencieusement le contexte.
+  if (isCoursesContext(captureContext) && mode !== 'scanner') return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F7F9F8', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text style={{ color: C.t2, fontSize: 15, fontWeight: '600', textAlign: 'center' }}>Ouverture de la fiche produit…</Text>
+      <TouchableOpacity onPress={onClose} style={{ marginTop: 20, paddingVertical: 10, paddingHorizontal: 18 }}
+        accessibilityRole="button" accessibilityLabel="Annuler">
+        <Text style={{ color: C.t3, fontSize: 14, fontWeight: '700' }}>Annuler</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  );
 
   if (mode === 'choice') return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F7F9F8' }}>
@@ -788,6 +880,21 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
           </Text>
         </View>
         <ScrollView style={{ padding: 16 }}>
+          {/* N6-15 — CONTEXTE COURSES (handoff). Bloc SECONDAIRE, neutre : rend perceptibles (A) l'intention
+              source et sa quantité d'ACHAT (jamais la quantité Stock) et (B) la conséquence de résolution.
+              Le nom source reste le nom Courses ORIGINAL même si le nom Stock est édité. */}
+          {captureContext && (
+            <View style={{ backgroundColor: '#F2F4F3', borderRadius: 12, borderWidth: 1, borderColor: C.border,
+              padding: 12, marginBottom: 14 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: C.t3, letterSpacing: 0.5, marginBottom: 3 }}>DEPUIS TA LISTE</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.t1 }}>
+                {captureContext.sourceName}{typeof captureContext.sourceQuantity === 'number' ? ` · ×${captureContext.sourceQuantity}` : ''}
+              </Text>
+              <Text style={{ fontSize: 12, color: C.t3, marginTop: 4, lineHeight: 17 }}>
+                Cette ligne sera retirée de ta liste de courses après l'ajout au stock.
+              </Text>
+            </View>
+          )}
           <View style={[styles.card, { padding: 20, alignItems: 'center', marginBottom: 16 }]}>
             {result.imgUrl && !imgError
               ? <Image source={{ uri: result.imgUrl }} style={{ width: 120, height: 120, borderRadius: 16, marginBottom: 12 }} resizeMode="contain" onError={handleScanImgError} />
@@ -934,7 +1041,7 @@ export default function ScanScreen({ onClose, setItems, items, user, familyId, e
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.greenBtn, { backgroundColor: 'transparent', marginTop: 10, flexDirection: 'row', gap: 6 }]}
-            onPress={() => { setResult(null); setScanned(false); setDlcInput(''); setPackUnits(1); setPackUnitsTouched(false); setDateTypeChoice(undefined); setManualName(''); }}>
+            onPress={() => { consumeCourseCtx(); setResult(null); setScanned(false); setDlcInput(''); setPackUnits(1); setPackUnitsTouched(false); setDateTypeChoice(undefined); setManualName(''); }}>
             <ChevronLeft size={16} color={C.green} strokeWidth={2.5} />
             <Text style={{ color: C.green, fontWeight: '700', fontSize: 15 }}>Scanner un autre</Text>
           </TouchableOpacity>

@@ -15,6 +15,7 @@ import { C } from './src/config/constants';
 import { decideAddItems, CAP_DECISION } from './src/utils/capEnforcement';
 import { estimateDays, suggestLocation } from './src/utils/product';
 import { buildAssertionProvenance, CAPTURE_METHOD } from './src/utils/captureProvenance';
+import { courseStockItemId, courseLineage } from './src/utils/handoffIdentity';
 import { selectExpiryPushes, buildNeutralPushContent } from './src/utils/notificationGate';
 import { strongTemporalDays } from './src/utils/temporalAuthority';
 import { styles } from './src/styles';
@@ -98,6 +99,16 @@ function App() {
   const [scanOpen, setScanOpen] = useState(false);
   const [paywallOpen, setPaywallOpen]       = useState(false);
   const [shoppingOpen, setShoppingOpen]     = useState(false);
+  // N6-15 — HANDOFF COURSES → STOCK. `captureContext` = intention en cours (nom + id déterministe +
+  // lignée) transmise au FORMULAIRE MANUEL CANONIQUE (ScanScreen). `removedShoppingId` = signal de
+  // cleanup pour retirer localement une ligne Courses qu'App vient de supprimer (cas modale ouverte).
+  const [captureContext, setCaptureContext] = useState(null);
+  const [removedShoppingId, setRemovedShoppingId] = useState(null);
+  // N6-15 (frontière d'identité) : bumper cette clé REMONTE ScanScreen → détruit tout état de formulaire
+  // DÉRIVÉ (manualName, result, packUnits…) qu'un handoff Courses aurait matérialisé. Le miroir `ref`
+  // permet à l'effet-frontière de lire le contexte courant SANS dépendre de captureContext (anti-course §8).
+  const [scanSessionKey, setScanSessionKey] = useState(0);
+  const captureContextRef = useRef(null);
   const [fridgeUrgent, setFridgeUrgent] = useState(false);
   const [fridgeInitialItem, setFridgeInitialItem] = useState(null);
   const [streak, setStreak] = useState(0);
@@ -265,6 +276,74 @@ function App() {
     } catch (e) { try { Sentry.captureException(e); } catch {} }
   };
 
+  // N6-15 — cleanup Courses : retire la ligne d'intention APRÈS un commit Stock confirmé/reconnu. Ne
+  // supprime jamais une représentation Stock. Échec delete → Stock reste + ligne Courses reste (le
+  // pré-vol la reconnaîtra au prochain essai, sans doublon). Succès → signale la modale Courses (si ouverte).
+  const cleanupShoppingRow = async (shoppingItemId) => {
+    if (!shoppingItemId) return false;
+    const { error } = await supabase.from('shopping_items').delete().eq('id', shoppingItemId);
+    if (!error) { setRemovedShoppingId(shoppingItemId); return true; }
+    return false;
+  };
+
+  // Courses INITIE. Le WRITER STOCK CANONIQUE (ScanScreen.addProduct) EXÉCUTE. App orchestre :
+  // pré-vol idempotent → soit reconnaît un handoff déjà rangé (retente juste le cleanup), soit ouvre
+  // le formulaire manuel canonique préréempli (nom seul, ZÉRO mutation à l'ouverture).
+  const handleSendToStock = async ({ shoppingItemId, name, quantity }) => {
+    if (!familyId || !shoppingItemId) return;
+    const deterministicItemId = courseStockItemId({ familyId, shoppingItemId });
+    if (!deterministicItemId) return;
+    let existing = null;
+    try {
+      const { data } = await supabase.from('items')
+        .select('family_id, assertion_provenance').eq('id', deterministicItemId).maybeSingle();
+      existing = data || null;
+    } catch (e) { try { Sentry.captureException(e); } catch {} }
+    if (existing) {
+      const lin = existing.assertion_provenance && existing.assertion_provenance.lineage;
+      if (existing.family_id === familyId && lin && lin.kind === 'COURSES' && lin.shoppingItemId === shoppingItemId) {
+        // Déjà rangé (Stock canonique reconnu) → AUCUN nouvel insert, on retente SEULEMENT le cleanup
+        // Courses et on inspecte son booléen pour un message VÉRIDIQUE (retiré vs non retiré).
+        const cleanupOk = await cleanupShoppingRow(shoppingItemId);
+        Alert.alert('Déjà dans ton stock', cleanupOk
+          ? `« ${name} » est déjà dans ton stock. La ligne a été retirée de ta liste de courses.`
+          : `« ${name} » est déjà dans ton stock, mais la ligne n'a pas pu être retirée de ta liste de courses.`);
+        return;
+      }
+      Alert.alert('Impossible d\'ajouter', 'Un conflit d\'identifiant empêche l\'ajout. Réessaie plus tard.');
+      return; // intégrité : pas de cleanup, pas de faux succès
+    }
+    // `sourceName` = nom Courses ORIGINAL, immuable (reste affichable même si l'utilisateur édite le nom
+    // Stock). `sourceQuantity` = quantité Courses en CONTEXTE D'AFFICHAGE (jamais quantité/autorité Stock).
+    // userOwner/familyOwner figent l'identité propriétaire → toute transition compte/foyer invalide ce
+    // contexte (§7). Ne JAMAIS identifier la ligne Courses par le nom édité (cleanup = shoppingItemId).
+    setCaptureContext({ shoppingItemId, sourceName: name, sourceQuantity: quantity, deterministicItemId,
+      lineage: courseLineage({ shoppingItemId }), userOwner: user?.id, familyOwner: familyId });
+    setShoppingOpen(false);
+    setScanOpen(true);
+  };
+
+  // Miroir : garde `captureContextRef` synchronisé pour que l'effet-frontière lise le contexte COURANT
+  // sans l'ajouter à ses dépendances (sinon il se déclencherait à la création du contexte → §8).
+  useEffect(() => { captureContextRef.current = captureContext; }, [captureContext]);
+
+  // N6-15 (§7 + frontière dérivée) — un handoff Courses ne doit JAMAIS survivre à une transition
+  // d'identité : sign-out (user null), changement d'utilisateur (user.id) ou de foyer (familyId).
+  // Quand une VRAIE frontière invalide un contexte ACTIF, on purge l'owner canonique ET on détruit le
+  // formulaire Scan dérivé (fermeture + remount via scanSessionKey). L'effet ne dépend QUE de
+  // user?.id/familyId → il ne peut pas se déclencher sur la création du contexte (mêmes user/family →
+  // owner concordant → conservé), ni sur une consommation normale (success/reset/switch, qui ne change
+  // ni user ni family) → aucun reset intempestif, aucune course.
+  useEffect(() => {
+    const ctx = captureContextRef.current;
+    if (!ctx) return;
+    if (!user || ctx.userOwner !== user?.id || ctx.familyOwner !== familyId) {
+      setCaptureContext(null);
+      setScanOpen(false);
+      setScanSessionKey(k => k + 1); // remonte ScanScreen → état de form dérivé détruit
+    }
+  }, [user?.id, familyId]);
+
   const enrichItemImages = async (allItems) => {
     const missing = allItems.filter(i => !i.img_url).slice(0, 5);
     for (const item of missing) {
@@ -395,7 +474,8 @@ function App() {
 
           <Modal visible={scanOpen} animationType="slide">
             <SafeAreaProvider>
-              <ScanScreen onClose={() => setScanOpen(false)} setItems={setItems} items={items} user={user} familyId={familyId} entitlement={entitlement} onRetryEntitlement={refreshEntitlement} countReady={familyId != null && hydratedFamilyId === familyId} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }} />
+              <ScanScreen key={scanSessionKey} onClose={() => { setScanOpen(false); setCaptureContext(null); }} setItems={setItems} items={items} user={user} familyId={familyId} entitlement={entitlement} onRetryEntitlement={refreshEntitlement} countReady={familyId != null && hydratedFamilyId === familyId} onPaywall={() => { setScanOpen(false); setPaywallOpen(true); }}
+                captureContext={captureContext} onCaptureContextConsumed={() => setCaptureContext(null)} onStockCommitted={cleanupShoppingRow} />
             </SafeAreaProvider>
           </Modal>
 
@@ -407,7 +487,8 @@ function App() {
 
           <Modal visible={shoppingOpen} animationType="slide" presentationStyle="pageSheet">
             <SafeAreaProvider>
-              <ShoppingListScreen onClose={() => setShoppingOpen(false)} familyId={familyId} user={user} />
+              <ShoppingListScreen onClose={() => setShoppingOpen(false)} familyId={familyId} user={user}
+                onSendToStock={handleSendToStock} removedShoppingId={removedShoppingId} onRemovedConsumed={() => setRemovedShoppingId(null)} />
             </SafeAreaProvider>
           </Modal>
         </SafeAreaView>

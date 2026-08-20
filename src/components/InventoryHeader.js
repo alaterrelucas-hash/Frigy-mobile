@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput } from 'react-native';
-import { Search, SlidersHorizontal } from 'lucide-react-native';
+import { Search, SlidersHorizontal, ShoppingCart } from 'lucide-react-native';
 
 // Titre + recherche/filtres révélés à la demande (icônes), au lieu d'une barre
 // de recherche et de pills toujours visibles. Réutilise intégralement l'état
 // et la logique de recherche/filtre existants — pas de nouvelle fonctionnalité,
 // seulement un mode de révélation différent.
-export default function InventoryHeader({ theme, fonts, query, onQueryChange, activeFilter, onFilterChange, filters }) {
+export default function InventoryHeader({ theme, fonts, query, onQueryChange, activeFilter, onFilterChange, filters, onShopping }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -21,6 +21,21 @@ export default function InventoryHeader({ theme, fonts, query, onQueryChange, ac
             présence par la taille et le tracking plutôt qu'un poids inventé. */}
         <Text style={{ fontFamily: fonts.semibold, fontSize: 32, fontWeight: '600', lineHeight: 37, letterSpacing: -0.4, color: theme.text1 }}>Mon stock</Text>
         <View style={{ flexDirection: 'row', gap: 7 }}>
+          {/* PA-01 : accès CAPACITÉ à la liste de courses — toujours présent dans Mon Stock, indépendant
+              du stock/temporel/filtre/recherche/lifecycle. Simple navigation (onShopping), aucune donnée,
+              aucune reco d'achat, aucune inférence « manquant/à acheter ». Même langage circulaire compact
+              que Search/Filters, non dominant. */}
+          <TouchableOpacity
+            onPress={() => onShopping?.()}
+            accessibilityRole="button"
+            accessibilityLabel="Courses"
+            accessibilityHint="Ouvrir la liste de courses"
+            style={{
+              width: 33, height: 33, borderRadius: 16.5, backgroundColor: theme.surface,
+              alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.separator,
+            }}>
+            <ShoppingCart size={14} color={theme.text2} strokeWidth={2} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setSearchOpen(o => !o)}
             accessibilityRole="button"

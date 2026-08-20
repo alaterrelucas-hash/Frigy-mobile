@@ -602,6 +602,7 @@ export default function FridgeScreen({
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
           filters={FILTERS}
+          onShopping={onShopping}
         />
 
         <View style={{ paddingHorizontal: 16, marginTop: 12, marginBottom: 16 }}>

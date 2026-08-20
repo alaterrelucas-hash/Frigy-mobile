@@ -30,7 +30,11 @@ ok('PANEL no logique de fréquence (count >= 2)', !shop.includes('count >= 2') &
 // ── Intention d'achat : addItem reste le SEUL écrivain explicite ; aucun waste→shopping ──
 ok('SHOP addItem conservé (insert shopping_items explicite)', shop.includes('addItem') && shop.includes("from('shopping_items')") && shop.includes('.insert('));
 ok('FRIDGE aucun écrivain shopping_items (waste ne touche pas Courses)', !fridge.includes('shopping_items'));
-ok('FRIDGE aucune navigation courses depuis la conso/gaspi', !fridge.includes('onShopping('));
+// PA-01 : un accès GÉNÉRIQUE aux Courses (navigation explicite depuis l'en-tête Mon Stock) est AUTORISÉ.
+// L'invariant N6-12 protégé n'est PAS « FridgeScreen ignore onShopping » mais « le flux conso/gaspi ne
+// déclenche JAMAIS d'intention d'achat » : consumeItem ne référence pas onShopping (WASTED ≠ TO-BUY).
+const consumePath = (fridge.match(/const consumeItem = async[\s\S]*?\n  \};/) || [''])[0];
+ok('FRIDGE conso/gaspi ne navigue PAS vers Courses (consumeItem sans onShopping)', consumePath.length > 0 && !consumePath.includes('onShopping'));
 
 // ── Autorité d'écriture consume/waste : preuve canonique AVANT représentation ──
 const ci = (fridge.match(/const consumeItem = async[\s\S]*?\n  \};/) || [''])[0];
