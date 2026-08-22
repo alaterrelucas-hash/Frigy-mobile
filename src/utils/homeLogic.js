@@ -52,14 +52,21 @@ export function selectHomePriority(items = [], now = new Date()) {
  * autorité NONE. Chaque item porte `watchDays` (jour passif autoritaire) pour un affichage neutre côté
  * composant, sans recalcul d'autorité. Ne rivalise jamais avec la priorité (aucune couleur d'alerte).
  */
-export function selectWatchItems(items = [], priority = null, gathering = [], now = new Date()) {
+// Collection Watch ÉLIGIBLE COMPLÈTE (ordre autoritaire, sans plafond) — même prédicat que la Watch :
+// passiveTemporalDays ∈ [0,7], hors priorité/gathering, trié par jours croissants. Sert au COMPTE réel
+// de débordement (« Voir les X autres »). Ne CHANGE aucun seuil/tri ni la sortie de selectWatchItems.
+export function selectWatchEligible(items = [], priority = null, gathering = [], now = new Date()) {
   const excl = new Set([priority?.id, ...gathering.map((g) => g?.id)].filter(Boolean));
   return items
     .map((i) => ({ item: i, days: passiveTemporalDays(i, now) }))
     .filter((x) => typeof x.days === 'number' && x.days >= 0 && x.days <= 7 && !excl.has(x.item.id))
     .sort((a, b) => a.days - b.days)
-    .slice(0, 2)
     .map((x) => ({ ...x.item, watchDays: x.days }));
+}
+// Home affiche AU PLUS 2 items Watch (décision produit) — les 2 premiers de la collection éligible.
+// Le reste vit dans Produits (« Voir les X autres »). Sortie IDENTIQUE à l'historique (≤2, même ordre).
+export function selectWatchItems(items = [], priority = null, gathering = [], now = new Date()) {
+  return selectWatchEligible(items, priority, gathering, now).slice(0, 2);
 }
 
 export function deriveHomeState(items = [], priority = null, best = null) {

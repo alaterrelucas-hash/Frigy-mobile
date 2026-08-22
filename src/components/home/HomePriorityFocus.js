@@ -1,34 +1,37 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { resolveFoodImage } from '../../utils/foodLanguage';
-import { getTemporalDescriptor, getTemporalColorKey } from '../../utils/temporal';
-import { priorityMicroCopy } from '../../utils/homeLogic';
-import { formatEuro, rescueValueSpokenLabel } from '../../utils/rescueValue';
 
-// Priorité du moment — composition Home (jamais InventoryProductRow). Un seul foyer
-// Natural Focus, derrière la primitive. Réutilise la SÉMANTIQUE + le token canonique
-// focusGlowPriority (lecture seule) ; ne modifie pas le Natural Focus de Mon Stock.
-export default function HomePriorityFocus({ item, theme, fonts, onPress }) {
+// Énoncé temporel CONTEXTUEL (headline) — DÉRIVÉ du jour AUTORITAIRE amplifié (`attentionDays`),
+// jamais un label système figé (« PRIORITÉ DU MOMENT »). UNKNOWN/absent est géré en amont : le héros
+// n'existe que si l'autorité amplifiée existe. Aucune urgence inventée.
+function priorityTemporalHeadline(days) {
+  if (typeof days !== 'number') return 'À UTILISER EN PRIORITÉ';
+  if (days < 0) return 'À VÉRIFIER EN PRIORITÉ';
+  if (days === 0) return "À UTILISER AUJOURD'HUI";
+  if (days === 1) return 'À UTILISER DEMAIN';
+  return `À UTILISER DANS ${days} JOURS`;
+}
+
+// Priorité du moment — composition Home (jamais InventoryProductRow). Un seul foyer Natural Focus,
+// derrière la primitive. Réutilise le token canonique focusGlowPriority (lecture seule).
+// Doctrine CTA : HOME décide d'agir → RECIPES résout. Solution culinaire fiable → « Voir quoi en
+// faire » (contexte item vers Recipes) ; sinon repli TRUTHFUL « Voir le produit » (détail produit).
+export default function HomePriorityFocus({ item, theme, fonts, onPress, hasRecipe = false, onSeeRecipe, onSeeProduct }) {
   if (!item) return null;
-  // N6-13 : le héros est AMPLIFIÉ-gaté par la couche de sélection ; il consomme le jour AUTORITAIRE
-  // amplifié porté par l'objet (`attentionDays`), jamais `computeDaysRemaining`/champ brut. La couleur
-  // d'alerte + le halo sont donc légitimes (évidence amplifiée présente à ce point).
+  // N6-13 : le héros consomme le jour AUTORITAIRE amplifié porté par l'objet (`attentionDays`).
   const days = item.attentionDays;
-  const descriptor = getTemporalDescriptor(days);
-  const colorKey = getTemporalColorKey(days);
-  const accent = theme[colorKey] || theme.text2;
+  const headline = priorityTemporalHeadline(days);
   const prim = resolveFoodImage(item);
-  // Rescue Value — valeur POTENTIELLE à sauver, information utile SECONDAIRE à l'aliment.
-  // Montant affirmé (text1), suffixe « à sauver » discret (text3). Pas de vert (réservé
-  // action/résultat) ni d'orange (réservé temporalité) → on ne brouille pas la sémantique.
-  const rescueDisplay = formatEuro(item.rescueValue);
-  const rescueA11y = rescueValueSpokenLabel(item.rescueValue);
 
-  // Food-first : la primitive prioritaire domine l'écran. Le layout ne réserve que
-  // HERO en largeur ; le Natural Focus (GLOW) DÉBORDE (overflow visible) → il accompagne
-  // l'aliment sans comprimer la colonne texte (même sur petit iPhone).
-  const HERO = 200;                 // primitive héro — centre de gravité, impossible à rater
-  const GLOW = HERO + 70;           // empreinte Natural Focus, en débordement
+  // CTA UNIQUE : solution culinaire fiable → « Voir quoi en faire » ; sinon repli « Voir le produit ».
+  const culinary = !!(hasRecipe && onSeeRecipe);
+  const ctaLabel = culinary ? 'Voir quoi en faire' : 'Voir le produit';
+  const onCta = culinary ? onSeeRecipe : (onSeeProduct || onPress);
+
+  // Food-first : la primitive prioritaire domine ; le Natural Focus (GLOW) déborde (overflow visible).
+  const HERO = 200;
+  const GLOW = HERO + 70;
   const glowOffset = (HERO - GLOW) / 2;
   const glowColor = theme.focusGlowPriority || theme.accent;
 
@@ -36,40 +39,28 @@ export default function HomePriorityFocus({ item, theme, fonts, onPress }) {
     <TouchableOpacity activeOpacity={0.85} onPress={onPress}
       style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
       <View style={{ flex: 1, minWidth: 0, paddingRight: 14 }}>
-        {/* Overline (TS02) : 600 + tracking 0.08em. UPPERCASE conservé pour cohérence
-            avec Mon Stock LOCKED + Home Master (écart assumé vs règle ≤2 mots). */}
+        {/* Overline temporel CONTEXTUEL (remplace « PRIORITÉ DU MOMENT ») — 600 + tracking. */}
         <Text style={{ fontFamily: fonts.semibold, fontSize: 13, fontWeight: '600', letterSpacing: 0.9, color: theme.text2, marginBottom: 8 }}>
-          PRIORITÉ DU MOMENT
+          {headline}
         </Text>
-        {/* Hero title — serif éditorial système iOS (Georgia), projection Master. */}
-        <Text style={{ fontFamily: 'Georgia', fontSize: 28, fontWeight: '700', letterSpacing: -0.28, lineHeight: 34, color: theme.text1, marginBottom: 6 }} numberOfLines={2}>
+        {/* Hero title — Source Sans 3 (typo Frigy verrouillée ; plus de serif Georgia). */}
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 28, fontWeight: '700', letterSpacing: -0.4, lineHeight: 34, color: theme.text1, marginBottom: 6 }} numberOfLines={2}>
           {item.name}
         </Text>
-        <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: accent, marginBottom: 2 }}>
-          {priorityMicroCopy(item)}
-        </Text>
-        <Text style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text2 }}>
-          {descriptor}
-        </Text>
-        {/* Rescue Value — « X€ à sauver ». Reste dans le bloc priorité (pas de card/bannière),
-            sous la temporalité. Tient dans la hauteur du Hero (colonne texte < primitive) →
-            ne comprime ni la tomate ni le Gathering. accessibilityLabel = forme parlée. */}
-        {!!rescueDisplay && (
-          <Text accessibilityLabel={rescueA11y}
-            style={{ marginTop: 6, fontSize: 14, lineHeight: 18 }}>
-            <Text style={{ fontFamily: fonts.semibold, fontWeight: '600', color: theme.text1 }}>{rescueDisplay}</Text>
-            <Text style={{ fontFamily: fonts.regular, fontWeight: '400', color: theme.text2 }}> à sauver</Text>
-          </Text>
-        )}
+        {/* CTA primaire UNIQUE, explicitement actionnable (le héros reste tappable). Une seule action.
+            La valeur économique n'est PLUS dans le héros : elle vit en contexte SECONDAIRE sous la Watch
+            (composant HomePriorityValue), pour ne pas concurrencer priorité / aliment / action. */}
+        <TouchableOpacity onPress={onCta} activeOpacity={0.85}
+          accessibilityRole="button" accessibilityLabel={ctaLabel}
+          style={{ marginTop: 14, alignSelf: 'flex-start', backgroundColor: theme.accent,
+            borderRadius: 14, paddingVertical: 10, paddingHorizontal: 16 }}>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>{ctaLabel}</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* translateX négatif : décale le centre optique de l'aliment vers la gauche (plus
-          central, moins « collé au bord droit ») sans réserver de largeur supplémentaire
-          ni comprimer la colonne texte. Le Natural Focus déborde librement derrière. */}
+      {/* translateX négatif : décale le centre optique de l'aliment vers la gauche sans réserver de
+          largeur. Le Natural Focus déborde librement derrière. */}
       <View style={{ width: HERO, height: HERO, alignItems: 'center', justifyContent: 'center', transform: [{ translateX: -22 }] }}>
-        {/* Natural Focus — NAPPE (ellipse horizontale via transform de vue), foyer unique,
-            derrière/sous la primitive, débordant. Même token/couleur/stops (pas de
-            recalibration). FUTURE VISUAL CALIBRATION : réglages fins post-macro. */}
         <Svg width={GLOW} height={GLOW} pointerEvents="none"
           style={{ position: 'absolute', top: glowOffset, left: glowOffset, transform: [{ scaleX: 1.25 }, { scaleY: 0.85 }] }}>
           <Defs>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, Dimensions, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Dimensions, Modal, Pressable, StyleSheet } from 'react-native';
+import { Plus } from 'lucide-react-native';
 import { resolveFoodImage } from '../../utils/foodLanguage';
 import { selectAffinityCandidates } from '../../utils/homeAffinities';
 import HomePriorityFocus from './HomePriorityFocus';
@@ -76,38 +77,38 @@ export default function HomeLowStock({
         // large et bas (2.54) → grande masse horizontale sous le texte. BOX_H plafonne les assets
         // hauts (ratio < 1, ex. bouteilles) pour qu'ils ne débordent jamais en composition empilée.
         const r = primary?.ratio || 1;
-        const BOX_W = Math.min(SCREEN_W * 0.72, 288); // riz réduit ~18% : contexte, plus héros
-        const BOX_H = 150;
-        let iw = BOX_W, ih = BOX_W / r;
-        if (ih > BOX_H) { ih = BOX_H; iw = BOX_H * r; }
+        // Rice en composition DROITE de la surface contexte (texte à GAUCHE, rice bas-droite), partageant
+        // la surface — pas un bloc vertical pleine largeur. Largeur ~52 % de la largeur interne surface
+        // (SCREEN_W − 2×16 marge − 2×22 pad), plafonnée 200 ; hauteur bornée 120 pour les assets hauts
+        // (ratio<1). Contain (jamais croppé), aucun fond/ombre. Le rice reste contexte (« déjà connu »).
+        const RW = Math.min(Math.round((SCREEN_W - 76) * 0.52), 200);
+        let iw = RW, ih = RW / r;
+        if (ih > 120) { ih = 120; iw = 120 * r; }
         const product = items.length === 1 ? (
-          // Composition EMPILÉE (pas deux colonnes) : identité texte alignée à gauche (gouttière
-          // Home), puis le produit en GRANDE présence Food Language centrée sous le texte → une
-          // seule scène éditoriale, le regard descend du nom vers la matière.
-          <View style={{ paddingHorizontal: 20 }}>
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.9, color: theme.text2, marginBottom: 8 }}>
-              CE QUE TU AS
-            </Text>
-            <Text style={{ fontFamily: 'Georgia', fontSize: 28, fontWeight: '700', letterSpacing: -0.28, lineHeight: 34, color: theme.text1 }} numberOfLines={2}>
-              {one.name}
-            </Text>
-            {!!one.location && (
-              <Text style={{ fontFamily: fonts.regular, fontSize: 15, fontWeight: '400', color: theme.text2, marginTop: 6 }}>
-                {one.location}
+          // Composition CONTEXTE : identité texte à GAUCHE (JE CONNAIS DÉJÀ / nom / location), rice à
+          // DROITE, alignée en bas → texte + matière partagent une seule scène horizontale.
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.9, color: theme.text2, marginBottom: 8 }}>
+                JE CONNAIS DÉJÀ
               </Text>
-            )}
-            {/* TERRITOIRE 1 (connu) — image resserrée sur « Riz / Placard » (16→6) : texte + image
-                = UNE unité perceptive franche. */}
-            <View style={{ alignItems: 'center', marginTop: 6 }}>
-              {primary
-                ? <Image source={primary.image} style={{ width: iw, height: ih }} resizeMode="contain" accessibilityLabel={one.name} />
-                : <Text style={{ fontSize: 96 }}>{one.emoji || '🛒'}</Text>}
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 24, fontWeight: '700', letterSpacing: -0.4, lineHeight: 30, color: theme.text1 }} numberOfLines={2}>
+                {one.name}
+              </Text>
+              {!!one.location && (
+                <Text style={{ fontFamily: fonts.regular, fontSize: 15, fontWeight: '400', color: theme.text2, marginTop: 6 }}>
+                  {one.location}
+                </Text>
+              )}
             </View>
+            {primary
+              ? <Image source={primary.image} style={{ width: iw, height: ih, alignSelf: 'flex-end' }} resizeMode="contain" accessibilityLabel={one.name} />
+              : <Text style={{ fontSize: 96 }}>{one.emoji || '🛒'}</Text>}
           </View>
         ) : (
-          <View style={{ paddingHorizontal: 20 }}>
+          <View>
             <Text style={{ fontFamily: fonts.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.9, color: theme.text2, marginBottom: 14 }}>
-              CE QUE TU AS
+              JE CONNAIS DÉJÀ
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {items.slice(0, 3).map((it) => {
@@ -133,23 +134,42 @@ export default function HomeLowStock({
         // excluant stock / confirmés / rejetés. [] → module masqué (fallback voix), jamais d'aléatoire.
         const candidates = selectAffinityCandidates(items, { excludeKeys: [...confirmed, ...rejected] });
         const showModule = candidates.length > 0 && rounds < MAX_SETS;
-        const CELL = (SCREEN_W - 40 - 24) / 3; // gouttière 20 chaque côté + 2 gaps de 12
+        const CELL = (SCREEN_W - 40 - 24) / 3; // CANVAS OUVERT : gouttière 20 chaque côté + 2 gaps de 12
         return (
-          // paddingTop 38 → respiration greeting → produit RESSERRÉE : le produit connu = contexte,
-          // le module « Confirmation Intelligente » devient le pivot visuel/fonctionnel de LOW A.
-          <View style={{ paddingTop: 38 }}>
-            {product}
-            {showModule ? (
-              // MODULE — Frigy utilise ce qu'il CONNAÎT pour apprendre ce que l'utilisateur a DÉJÀ
-              // (jamais un achat / une liste de courses). Composition ouverte : titre + 3 produits
-              // Food Language + « Je l'ai » (support léger, ni card ni vert plein) + sortie discrète.
-              // FRONTIÈRE T1→T2 : grand espace (44, > gaps internes) = séparation SENTIE par le
-              // rythme, sans ligne ni card ni fond. TERRITOIRE 2 (à confirmer) = titre + 3 unités.
-              <View style={{ marginTop: 44 }}>
-                <Text style={{ fontFamily: 'Georgia', fontSize: 20, fontWeight: '600', letterSpacing: -0.2, lineHeight: 25, color: theme.text1, paddingHorizontal: 20 }}>
-                  Tu as aussi ça chez toi ?
+          // BALANCE (« ouvert par défaut, contenir avec intention ») : LOW a DEUX moments sémantiques.
+          //   CONTEXTE FRIGY (pourquoi + ce qu'il connaît déjà) → UNE surface tonale COMPACTE.
+          //   ACTION UTILISATEUR (candidats + réponses) → CANVAS OUVERT.
+          // Le greeting reste dehors (HomeScreen). Le contraste contenu → ouvert EST l'architecture (aucun
+          // 2e surface, aucun halo). L'ancien HALO threshold et l'ancienne surface pleine-tâche sont retirés.
+          <View>
+            {/* CONTEXTE FRIGY — surface tonale COMPACTE : accentSoft (token Halo, aucun nouveau vert), radius
+                28, AUCUNE ombre, AUCUN bord (le fond tonal suffit) ; marge externe 16, padding interne 22.
+                S'ARRÊTE après le produit connu. marginTop 18 → ~26px depuis « Bonjour Lucas ». */}
+            <View style={{ marginHorizontal: 16, marginTop: 18, backgroundColor: theme.accentSoft,
+              borderRadius: 28, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 22 }}>
+              {showModule && (
+                // SUJET / BUT LOW = « Aide-moi à mieux connaître ton stock » — décrit la TÂCHE d'acquisition de
+                // connaissance (pourquoi Frigy demande), pas un manque réel. Typographie FAMILLE Calm (Source
+                // Sans 3, 29/700, vert accent, lineHeight 34), 2 lignes. marginBottom 28 → sépare de « JE CONNAIS
+                // DÉJÀ ». Gaté showModule (sans candidats → fallback « Je garde ça en tête. »).
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 29, fontWeight: '700', letterSpacing: -0.4, lineHeight: 34, color: theme.accent, marginBottom: 28 }}>
+                  Aide-moi à mieux connaître{'\n'}ton stock
                 </Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 9 }}>
+              )}
+              {product}
+            </View>
+
+            {showModule ? (
+              // ACTION UTILISATEUR — CANVAS OUVERT (hors surface) : question d'action + 3 candidats Food
+              // Language + « J'en ai » (contrôles) + sortie. Gouttière page 20. marginTop 30 = passage
+              // surface → ouvert (~28–36px). Aucune card candidat, aucun fond, aucun séparateur.
+              <View style={{ marginTop: 30 }}>
+                {/* QUESTION D'ACTION attachée aux 3 candidats (référent immédiat en dessous). SUBORDONNÉE au
+                    titre vert : texte sombre, ~21/600, ni majuscules ni vert ni card. */}
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 21, fontWeight: '600', letterSpacing: -0.2, lineHeight: 27, color: theme.text1, paddingHorizontal: 20, marginBottom: 14 }}>
+                  Tu as aussi l’un de ceux-là ?
+                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 }}>
                   {candidates.map((c) => {
                     const cr = c.ratio || 1;
                     let iw = CELL, ih = CELL / cr;
@@ -165,34 +185,73 @@ export default function HomeLowStock({
                         <Text numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text1, marginTop: 6, maxWidth: CELL, textAlign: 'center' }}>
                           {c.name}
                         </Text>
-                        {/* « Je l'ai » DÉ-CHROMÉ : simple lien texte accent (fin du look « 3 pills UI-kit »).
-                            Chrome visible minimal, mais hit-area ≥44pt garantie par hitSlop généreux. */}
-                        <TouchableOpacity onPress={() => openSheet(c)} activeOpacity={0.6}
-                          hitSlop={{ top: 14, bottom: 14, left: 24, right: 24 }}
-                          accessibilityRole="button" accessibilityLabel={`${c.name}, je l'ai`}
-                          style={{ marginTop: 6 }}>
-                          {/* présence subtile ravivée (13→14, semibold accent conservé) — reste
-                              secondaire à l'image + au nom ; toujours ni pill ni fond ni bord. */}
-                          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.accent }}>Je l'ai</Text>
+                        {/* CTA « J'en ai » — chip SECONDAIRE explicitement tappable (contour + surface
+                            très légère, jamais un bouton vert plein) : l'affordance doit être évidente
+                            sans dominer l'image. Icône Plus canonique (lucide) + libellé « J'en ai »
+                            (valide pour Œufs/Oignon/Tomates). Ouvre la feuille de confirmation
+                            canonique (aucune écriture ici). Hit-area ≥44pt via hitSlop. */}
+                        <TouchableOpacity onPress={() => openSheet(c)} activeOpacity={0.7}
+                          hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+                          accessibilityRole="button" accessibilityLabel={`${c.name}, j'en ai`}
+                          style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
+                            borderWidth: 1, borderColor: theme.separator, backgroundColor: theme.surface,
+                            borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 }}>
+                          <Plus size={14} color={theme.accent} strokeWidth={2.4} />
+                          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.accent }}>J'en ai</Text>
                         </TouchableOpacity>
                       </View>
                     );
                   })}
                 </View>
+                {/* Réponse explicite « je n'ai aucun » — action tertiaire, PLUS DISCRÈTE que chaque
+                    chip « J'en ai » (texte neutre text2, sans contour/vert) : quieter, sans culpabilité
+                    ni warning. Comportement sous-jacent INCHANGÉ (rejectSet → set suivant). */}
                 <TouchableOpacity onPress={() => rejectSet(candidates.map((c) => c.key))} activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button" accessibilityLabel="Aucun de ceux-là"
-                  style={{ alignSelf: 'center', marginTop: 20 }}>
-                  <Text style={{ fontFamily: fonts.semibold, fontSize: 14, fontWeight: '600', color: theme.accent }}>Aucun de ceux-là</Text>
+                  hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+                  accessibilityRole="button" accessibilityLabel="Je n'ai aucun de ceux-là"
+                  style={{ alignSelf: 'center', marginTop: 22, backgroundColor: theme.surface,
+                    borderRadius: 999, paddingVertical: 8, paddingHorizontal: 16 }}>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text2 }}>Je n'ai aucun de ceux-là</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               // Fallback (aucun candidat fiable / sets épuisés) : état LOW A minimal, calme.
               // ACKNOWLEDGEMENT (pas un CTA) — Frigy confirme une valeur ACQUISE, sans rien réclamer.
-              <Text style={{ fontFamily: fonts.regular, fontSize: 16, fontWeight: '400', color: theme.text2, lineHeight: 22, paddingHorizontal: 20, marginTop: 52 }}>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 16, fontWeight: '400', color: theme.text2, lineHeight: 22, paddingHorizontal: 20, marginTop: 28 }}>
                 Je garde ça en tête.
               </Text>
             )}
+
+            {/* AUTONOMY HINT — ÉDUCATION (pas du remplissage) : Frigy ne propose jamais TOUT le foyer → il
+                apprend à l'utilisateur qu'il peut ajouter le reste lui-même via le + GLOBAL (nav). Complète
+                la boucle LOW (connu → suggestions → ajout autonome). Sur CANVAS OUVERT (aucune card), gaté par
+                LOW lui-même (aucun tracking « vu »). NON interactif : le + réel est le bouton de la nav — ici
+                aucun 2e CTA, aucune flèche. Copie VÉRIFIÉE : le + ouvre ScanScreen qui expose scan code-barres
+                (gratuit), photo (Pro) et saisie manuelle (gratuit) → « Photo, scan ou ajout manuel » est vrai.
+                Séparateur subtil (separatorSubtle) = changement de rôle (réponse suggérée → ajout autonome). */}
+            <View style={{ marginTop: 34, paddingHorizontal: 20 }}>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separatorSubtle, marginBottom: 22 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                {/* Repère + NON-INTERACTIF (pointerEvents none, a11y masqué) : icône + VERTE NUE (aucun
+                    conteneur : ni cercle, ni pill, ni fond, ni bord, ni ombre) → simple écho visuel du +
+                    global, jamais pris pour un 2e bouton d'ajout. Le VRAI + reste celui de la nav. */}
+                <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
+                  style={{ marginRight: 10, marginTop: 2 }}>
+                  <Plus size={20} color={theme.accent} strokeWidth={2.6} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 17, fontWeight: '600', letterSpacing: -0.2, color: theme.text1 }}>
+                    Tu as autre chose chez toi ?
+                  </Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 15.5, fontWeight: '400', color: theme.text2, lineHeight: 21, marginTop: 3 }}>
+                    Ajoute-le avec le + en bas de l’écran.
+                  </Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 14, fontWeight: '400', color: theme.text3, marginTop: 2 }}>
+                    Photo, scan ou ajout manuel.
+                  </Text>
+                </View>
+              </View>
+            </View>
 
             {/* Sheet léger « Je l'ai » — version accélérée du flow d'ajout : quantité (défaut 1),
                 date auto-estimée côté ajout (estimateDays) → aucune donnée fictive. */}
@@ -204,7 +263,7 @@ export default function HomeLowStock({
                     <>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Image source={sheetCand.image} style={{ width: 72, height: 56 }} resizeMode="contain" accessibilityLabel={sheetCand.name} />
-                        <Text style={{ fontFamily: 'Georgia', fontSize: 24, fontWeight: '700', letterSpacing: -0.24, color: theme.text1, marginLeft: 12 }}>
+                        <Text style={{ fontFamily: fonts.semibold, fontSize: 22, fontWeight: '700', letterSpacing: -0.4, color: theme.text1, marginLeft: 12 }}>
                           {sheetCand.name}
                         </Text>
                       </View>
@@ -227,7 +286,7 @@ export default function HomeLowStock({
                       <TouchableOpacity onPress={() => confirmHave(sheetCand, qty)} activeOpacity={0.85}
                         accessibilityRole="button" accessibilityLabel={`Confirmer ${sheetCand.name}`}
                         style={{ marginTop: 28, backgroundColor: theme.accent, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Je l'ai</Text>
+                        <Text style={{ fontFamily: fonts.semibold, fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>J'en ai</Text>
                       </TouchableOpacity>
                     </>
                   )}

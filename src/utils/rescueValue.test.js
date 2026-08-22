@@ -52,8 +52,10 @@ ok('RVF total_units ne substitue rien → null', computeRescueValue({ price: 2, 
 // ── PRICE / RESCUE-SEPARATION : preuves source (P2 + action Rescue indépendante de l'argent) ──
 const scan = fs.readFileSync(path.join(__dirname, '../screens/ScanScreen.js'), 'utf8');
 const hpf = fs.readFileSync(path.join(__dirname, '../components/home/HomePriorityFocus.js'), 'utf8');
+const hpv = fs.readFileSync(path.join(__dirname, '../components/home/HomePriorityValue.js'), 'utf8');
 ok('PRICE-T01 item.price = unit_price (PER-UNIT, P2) côté writer ScanScreen', scan.includes('price: p.unit_price'));
-ok('RES-T02/03 « X€ à sauver » (+ VoiceOver) gaté sur montant présent → null = héro sans argent', hpf.includes('!!rescueDisplay &&'));
+ok('RES-T02/03 argent gaté sur montant présent (bloc « valeur » sous la Watch → null = aucun argent)', hpv.includes('const amount = formatEuro(item.rescueValue)') && hpv.includes('if (!amount) return null'));
+ok('RES-T02b héro priorité SANS argent (séparation : plus de montant/formatEuro dans HomePriorityFocus)', !/formatEuro|rescueValue/.test(hpf));
 
 // ── formatEuro : format FR sans espace avant € ────────────────────────────────
 ok('format 3,20€', formatEuro(3.2) === '3,20€');

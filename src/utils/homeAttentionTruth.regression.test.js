@@ -35,11 +35,14 @@ ok('LOGIC deriveVoice via amplifiedTemporalDays (pas de brut)', /deriveVoice[\s\
 ok('LOGIC priorityMicroCopy lit attentionDays porté', /priorityMicroCopy[\s\S]*?attentionDays/.test(logic));
 
 // ── WATCH = palier PASSIF neutre ──
-ok('LOGIC selectWatchItems via passiveTemporalDays', /selectWatchItems[\s\S]*?passiveTemporalDays/.test(logic));
+ok('LOGIC watch via passiveTemporalDays (selectWatchEligible) + selectWatchItems délègue (cap 2)',
+  /selectWatchEligible[\s\S]*?passiveTemporalDays/.test(logic)
+  && /selectWatchItems[\s\S]*?return selectWatchEligible\([^)]*\)\.slice\(0, 2\)/.test(logic));
 ok('LOGIC watch porte watchDays autoritaire', logic.includes('watchDays: x.days'));
 ok('WATCH consomme it.watchDays', watch.includes('it.watchDays'));
 ok('WATCH no getTemporalColorKey (aucune couleur d\'alerte passive)', !watch.includes('getTemporalColorKey'));
-ok('WATCH puce NEUTRE (theme.text4)', watch.includes('const dot = theme.text4'));
+ok('WATCH aucune puce d\'alerte (§19 : puce retirée ; date + chevron neutre suffisent, jamais de couleur passive)',
+  !watch.includes('const dot =') && !/backgroundColor: dot/.test(watch) && watch.includes('ChevronRight'));
 
 // ── Lisibilité du foyer (N6-14) : autorité de mode serveur ; UNKNOWN ≠ vide/First Run ──
 ok('SCREEN reçoit itemsReady', screen.includes('itemsReady'));
@@ -54,7 +57,7 @@ ok('SCREEN ordre : First Run → NEUTRAL → EMPTY', (() => {
 ok('SCREEN NEUTRAL précède le rendu EmptyStock (jamais interprété comme vide)',
   screen.indexOf('mode === HOME_MODE.NEUTRAL ?') > 0 && screen.indexOf('mode === HOME_MODE.NEUTRAL ?') < screen.indexOf('<HomeEmptyStock'));
 ok('SCREEN NEUTRAL précède l\'état C actif (jamais interprété comme foyer connu)',
-  screen.indexOf('mode === HOME_MODE.NEUTRAL ?') > 0 && screen.indexOf('mode === HOME_MODE.NEUTRAL ?') < screen.indexOf('state === HOME_STATE.C'));
+  screen.indexOf('mode === HOME_MODE.NEUTRAL ?') > 0 && screen.indexOf('mode === HOME_MODE.NEUTRAL ?') < screen.indexOf('state === HOME_STATE.C && ('));
 ok('SCREEN First Run exige never_initialized prouvé (jamais un flag device)', !screen.includes('stockInitialized') && !screen.includes('frigy_stock_initialized'));
 ok('SCREEN QA dev conserve les previews (scénario → mode)', screen.includes('qa.firstRun ? HOME_MODE.FIRST_RUN'));
 ok('APP passe itemsReady = hydratedFamilyId === familyId', app.includes('itemsReady={familyId != null && hydratedFamilyId === familyId}'));
@@ -67,9 +70,13 @@ ok('CALM no « Rien ne presse » (HomeScreen)', !screen.includes('Rien ne presse
 ok('CALM no « Rien ne presse » (homeLogic deriveVoice)', !logic.includes('Rien ne presse'));
 ok('CALM no reassurance de substitution (Tout va bien / Rien d\'urgent / Pas de priorité)',
   !screen.includes('Tout va bien') && !screen.includes("Rien d'urgent") && !screen.includes('Pas de priorité') && !logic.includes('Tout va bien'));
-// État C conserve la WatchList NEUTRE (silence ≠ suppression de la surface passive acceptée).
-ok('CALM État C garde la WatchList (silence, pas suppression)',
-  screen.includes('state === HOME_STATE.C &&') && /HOME_STATE\.C &&[\s\S]{0,200}HomeWatchList/.test(screen));
+// État C = FAMILLE CALM (même scène HomeCalm) : AVEC Watch réel → variante WATCH ; ZÉRO Watch → variante
+// SILENCE (présence + rôle Frigy). Jamais un calme global fabriqué, jamais « 0 produits », jamais un Home vide.
+ok('CALM État C : variante WATCH (watchItems>0) + variante SILENCE (repli), même HomeCalm',
+  screen.includes('state === HOME_STATE.C &&')
+  && /HOME_STATE\.C && \(\s*<>[\s\S]{0,400}watchItems\.length > 0 \?[\s\S]{0,300}<HomeCalm watchItems=\{watchItems\}[\s\S]{0,200}<HomeCalm variant="silence"/.test(screen));
+ok('CALM État C : variante WATCH gatée sur watchItems.length > 0 (jamais « 0 produits »)',
+  /watchItems\.length > 0 \?/.test(screen) && !/0 produit/.test(screen.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '').replace(/^\s*\/\/.*$/gm, '')));
 
 // ── Allowlist amplifié INCHANGÉE (production : héros temporel silencieux par design) ──
 ok('AUTH AMPLIFIED_PASSIVE_DATE_TYPES = new Set() (VIDE, non peuplé)', /AMPLIFIED_PASSIVE_DATE_TYPES\s*=\s*new Set\(\)\s*;/.test(auth));

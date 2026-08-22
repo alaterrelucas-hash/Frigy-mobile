@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadHomeRecipeCache, refreshHomeRecipes, selectBestHomeRecipe, deriveGatheringItems, resolveRecipeImage } from '../utils/homeRecipes';
-import { selectHomePriority, selectWatchItems, deriveHomeState, deriveVoice, deriveRichnessLevel, HOME_STATE, HOME_LEVEL } from '../utils/homeLogic';
+import { selectHomePriority, selectWatchEligible, deriveHomeState, deriveVoice, deriveRichnessLevel, HOME_STATE, HOME_LEVEL } from '../utils/homeLogic';
 import { amplifiedTemporalDays } from '../utils/temporalAuthority';
 import { resolveFoodImage } from '../utils/foodLanguage';
 import { computeRescueValue } from '../utils/rescueValue';
@@ -61,7 +61,10 @@ export default function useHomeSuggestion(items = [], opts = {}) {
       : null;
     const best = recipes && recipes.length ? selectBestHomeRecipe(recipes, items, priority) : null;
     const gatheringItems = deriveGatheringItems(best, priority);
-    const watchItems = selectWatchItems(items, priority, gatheringItems);
+    // Watch : collection éligible COMPLÈTE (compte réel) → Home affiche 2 + « Voir les X autres ».
+    const watchEligible = selectWatchEligible(items, priority, gatheringItems);
+    const watchItems = watchEligible.slice(0, 2);
+    const watchOverflow = Math.max(0, watchEligible.length - 2);
     const state = deriveHomeState(items, priority, best);
     const voice = deriveVoice(state, priority, items);
     // Modèle adaptatif : LEVEL (cadre) + SIGNALS (contenu réel, jamais inventé).
@@ -79,6 +82,7 @@ export default function useHomeSuggestion(items = [], opts = {}) {
       signals,
       priority,
       watchItems,
+      watchOverflow,
       selectedRecipe: best?.recipe || null,
       gatheringItems,
       // N6-05 : un ingrédient non résolu (UNRESOLVED) n'est PAS « manquant » (no-match technique
