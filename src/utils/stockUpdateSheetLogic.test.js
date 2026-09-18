@@ -35,6 +35,18 @@ ok('§6 causeVisible seulement pour EMPTY', L.causeVisible('EMPTY') === true && 
 ok('§5/§9 sanitizeCauses hors EMPTY force (false,false)', JSON.stringify(L.sanitizeCauses('HALF', true, true)) === JSON.stringify({ usedDeclared: false, wasteDeclared: false }));
 ok('§6 sanitizeCauses à EMPTY préserve les bascules', JSON.stringify(L.sanitizeCauses('EMPTY', true, false)) === JSON.stringify({ usedDeclared: true, wasteDeclared: false }));
 
+// ── Ouverture INTENTIONNELLE : « Il n'en reste plus » → EMPTY pré-sélectionné (état UI, jamais une mutation) ──
+ok('ouverture NORMALE (aucune intention) → aucune sélection initiale', L.resolveInitialSelection(null, 'HALF') === null && L.resolveInitialSelection(undefined, null) === null);
+ok('ouverture « il n’en reste plus » → EMPTY pré-sélectionné', L.resolveInitialSelection('EMPTY', 'HALF') === 'EMPTY' && L.resolveInitialSelection('EMPTY', null) === 'EMPTY');
+ok('pré-sélection EMPTY → section causale visible IMMÉDIATEMENT', L.causeVisible(L.resolveInitialSelection('EMPTY', 'FULL')) === true);
+ok('pré-sélection EMPTY → causes (false,false) au départ (aucune cause impliquée)',
+  JSON.stringify(L.sanitizeCauses(L.resolveInitialSelection('EMPTY', 'FULL'), false, false)) === JSON.stringify({ usedDeclared: false, wasteDeclared: false }));
+ok('pré-sélection EMPTY → CTA actif (EMPTY est une sélection EXPLICITE)', L.canSubmit({ selectedLevel: L.resolveInitialSelection('EMPTY', 'HALF'), beforeLevel: 'HALF' }));
+ok('intention non sélectionnable vs baseline → retombe à null (jamais une sélection que le CTA refuserait)',
+  L.resolveInitialSelection('EMPTY', 'EMPTY') === null && L.resolveInitialSelection('FULL', 'HALF') === null && L.resolveInitialSelection('NOPE', null) === null);
+ok('quitter EMPTY (→ HALF) réinitialise les causes, même après pré-sélection',
+  JSON.stringify(L.sanitizeCauses('HALF', true, true)) === JSON.stringify({ usedDeclared: false, wasteDeclared: false }) && L.causeVisible('HALF') === false);
+
 // ── canSubmit : niveau explicite requis, cause JAMAIS requise ──
 ok('CTA inactif sans sélection (baseline seul ne suffit pas)', !L.canSubmit({ selectedLevel: null, beforeLevel: 'FULL' }));
 ok('CTA inactif si niveau = baseline (pas strictement inférieur)', !L.canSubmit({ selectedLevel: 'HALF', beforeLevel: 'HALF' }));

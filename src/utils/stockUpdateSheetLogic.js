@@ -53,6 +53,18 @@ export function isLevelSelectable(level, beforeLevel = null) {
   return ORDER[level] < ORDER[beforeLevel];          // STRICTEMENT inférieur
 }
 
+/**
+ * resolveInitialSelection — état UI INITIAL d'une ouverture INTENTIONNELLE : l'utilisateur a DÉJÀ affirmé le
+ * reste sur une autre surface (« Il n'en reste plus » → EMPTY) et ne doit pas le réaffirmer. Ce n'est QU'UNE
+ * pré-sélection d'interface : aucune mutation, aucune autorité métier, aucune cause impliquée (used/waste
+ * restent false). Sans intention → null (l'ouverture normale n'assertit toujours rien). Une intention non
+ * sélectionnable vis-à-vis du baseline retombe à null (jamais de sélection que le CTA refuserait).
+ */
+export function resolveInitialSelection(initialLevel = null, beforeLevel = null) {
+  if (initialLevel == null) return null;
+  return isLevelSelectable(initialLevel, beforeLevel) ? initialLevel : null;
+}
+
 // La section causale n'apparaît QUE lorsque le reste choisi est EMPTY (clôture).
 export const causeVisible = (selectedLevel) => selectedLevel === 'EMPTY';
 

@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, Modal, Pressable, ScrollView } fro
 import { Utensils, Trash2, ChevronRight, Check } from 'lucide-react-native';
 import { useStockTheme } from '../../utils/stockTheme';
 import { resolveFoodImage } from '../../utils/foodLanguage';
-import { REMAINING_STOPS, isLevelSelectable, canSubmit, remainingLabel, causeVisible, sanitizeCauses } from '../../utils/stockUpdateSheetLogic';
+import { REMAINING_STOPS, isLevelSelectable, canSubmit, remainingLabel, causeVisible, sanitizeCauses, resolveInitialSelection } from '../../utils/stockUpdateSheetLogic';
 
 // STOCK UPDATE SHEET (Mon Stock, production V2) — REMAINING-FIRST. UNE tâche, UNE surface, UNE validation.
 //
@@ -12,16 +12,25 @@ import { REMAINING_STOPS, isLevelSelectable, canSubmit, remainingLabel, causeVis
 // (f,f)(t,f)(f,t)(t,t) sont valides. Hors EMPTY, aucune cause n'est sollicitée ni envoyée. Aucune écriture au
 // tap : la mutation canonique (apply_stock_update) part uniquement au CTA, gérée par l'OWNER (onConfirm).
 // Ouvrir la sheet n'assertit rien : le baseline connu est montré comme ÉTAT COURANT, distinct d'une sélection.
+// SEULE EXCEPTION : une ouverture INTENTIONNELLE (initialRemainingLevel) reprend une affirmation que
+// l'utilisateur vient de faire sur une autre surface — pré-sélection d'UI, jamais une mutation.
 export default function StockUpdateSheet({
   visible = false, item = null, fonts = {}, onConfirm, onNoChange, onViewProduct, onDismiss, submitting = false,
+  initialRemainingLevel = null,
 }) {
   const theme = useStockTheme();
   const baseline = item && item.remaining_level != null ? item.remaining_level : null; // ÉTAT COURANT (jamais une sélection)
-  const [selected, setSelected] = useState(null);   // sélection EXPLICITE (null à l'ouverture — aucune assertion)
+  // Sélection EXPLICITE. null à l'ouverture NORMALE (aucune assertion) ; pré-sélectionnée seulement si
+  // l'ouverture porte une intention DÉJÀ affirmée ailleurs (initialRemainingLevel, ex. « Il n'en reste plus »
+  // → EMPTY). Pré-sélection = état UI pur : aucune mutation, les causes restent (false,false).
+  const [selected, setSelected] = useState(() => resolveInitialSelection(initialRemainingLevel, baseline));
   const [used, setUsed] = useState(false);
   const [waste, setWaste] = useState(false);
 
-  useEffect(() => { setSelected(null); setUsed(false); setWaste(false); }, [item, visible]);
+  useEffect(() => {
+    setSelected(resolveInitialSelection(initialRemainingLevel, baseline));
+    setUsed(false); setWaste(false);
+  }, [item, visible, initialRemainingLevel, baseline]);
 
   if (!item) return null;
   const prim = resolveFoodImage(item);

@@ -26,7 +26,8 @@ ok('§4 aucun RescueOutcomeSheet/RescueRemainingSheet câblé', !/RescueOutcomeS
 ok('§5 preview DEV 2-étapes retiré (aucun rescueStep/rescueFixture)', !/rescueStep|rescueFixture|rescueOutcome/.test(fridge));
 
 // ── §2/§22 : tap produit → surface UNIQUE (pas la fiche) ; la fiche est atteinte via « Voir la fiche » ──
-ok('§2 tap row principale → setUpdateItem(item)', /onPress=\{\(\) => setUpdateItem\(item\)\}/.test(fridge));
+ok('§2 tap row principale → openStockUpdate(item) (ouverture NORMALE, aucune intention)',
+  /onPress=\{\(\) => openStockUpdate\(item\)\}/.test(fridge) && (fridge.match(/setUpdateItem\(item\)/g) || []).length === 1);
 ok('§13 « Voir la fiche produit » → ouvre la fiche (setSelectedItem) sans mutation', /onViewProduct=\{[^}]*setSelectedItem\(it\)/.test(fridge));
 
 // ── §14/§18 : MUTATION CANONIQUE UNIQUE — aucun écrivain d'issue parallèle ──
@@ -46,7 +47,7 @@ ok('§17 INCREASE_NOT_ALLOWED / ITEM_ALREADY_CLOSED / NOT_AUTHORIZED / IDEMPOTEN
 
 // ── §21/§22 fiche : plus de doublon USED/WASTED ; action unique « Mettre mon stock à jour » ouvre la sheet ──
 ok('§22 fiche : plus de handlers « J’ai mangé ça » / « Gaspillé »', !/J'ai mangé ça/.test(fridge) && !/Gaspillé/.test(fridge));
-ok('§22 fiche : action « Mettre mon stock à jour » → setUpdateItem', /Mettre mon stock à jour/.test(fridge) && /closeModal\(\); setUpdateItem\(item\)/.test(fridge));
+ok('§22 fiche : action « Mettre mon stock à jour » → openStockUpdate', /Mettre mon stock à jour/.test(fridge) && /closeModal\(\); openStockUpdate\(item\)/.test(fridge));
 ok('§23 bouton global « Modifier ce produit » supprimé', !/Modifier ce produit/.test(fridge));
 
 // ── §3/§24/§25 : éditeurs FOCALISÉS (un champ à la fois), pas un formulaire global multi-champs ──
@@ -75,7 +76,8 @@ ok('sheet : présentationnel — aucun supabase/rpc (aucune écriture au tap)', 
 const sheetNoLayout = sheet.replace(/(maxHeight|width|height|left|right|top|bottom|flex|opacity):\s*'?\d+%'?/g, '');
 ok('sheet : 5 crans via REMAINING_STOPS (contrat), jamais un % de donnée', /REMAINING_STOPS\.map/.test(sheet) && !/\d\s*%/.test(sheetNoLayout));
 ok('§8 sheet : monotonicité UI stricte (isLevelSelectable vs baseline) + CTA gaté (canSubmit)', /isLevelSelectable\(s\.level, baseline\)/.test(sheet) && /canSubmit\(\{ selectedLevel: selected, beforeLevel: baseline \}\)/.test(sheet));
-ok('§9 sheet : baseline ≠ sélection (selected init null ; baseline = remaining_level ?? null)', /const \[selected, setSelected\] = useState\(null\)/.test(sheet) && /item\.remaining_level != null \? item\.remaining_level : null/.test(sheet));
+ok('§9 sheet : baseline ≠ sélection (init = resolveInitialSelection, JAMAIS le baseline ; baseline = remaining_level ?? null)',
+  /useState\(\(\) => resolveInitialSelection\(initialRemainingLevel, baseline\)\)/.test(sheet) && /item\.remaining_level != null \? item\.remaining_level : null/.test(sheet) && !/useState\(baseline\)/.test(sheet));
 ok('§6 sheet : cause révélée SEULEMENT à EMPTY (causeVisible) ; toggles indépendants (setUsed/setWaste)', /causeVisible\(selected\)/.test(sheet) && /setUsed\(v => !v\)/.test(sheet) && /setWaste\(v => !v\)/.test(sheet));
 ok('§9 sheet : quitter EMPTY réinitialise les causes (sanitizeCauses au pick)', /sanitizeCauses\(level, used, waste\)/.test(sheet));
 ok('§0 sheet : onConfirm UNE seule fois (au submit du CTA)', (sheet.match(/onConfirm\?\./g) || []).length === 1);
@@ -91,6 +93,25 @@ ok('sheet : aucun hex #RRGGBB (tokens only), sauf backdrop rgba', !/#[0-9a-fA-F]
 ok('corr : CORRECTION_STOPS + sortie « il n’en reste plus » → update, pas de correction EMPTY silencieuse',
   /CORRECTION_STOPS\.map/.test(corr) && /onGoToUpdate/.test(corr) && /Il n’en reste plus/.test(corr));
 ok('corr : présentationnel (aucun supabase), aucun %, aucun mot consommation/gaspillage', !/supabase/i.test(corr) && !/%/.test(corr) && !/consomm|gaspill/i.test(corr));
+
+// ══ OUVERTURE INTENTIONNELLE — « Il n'en reste plus » → EMPTY pré-sélectionné (micro-UX, aucune mutation) ══
+// L'utilisateur vient d'affirmer qu'il n'en reste plus : la sheet ne doit pas lui reposer la question.
+// EMPTY n'est qu'un ÉTAT UI INITIAL — aucun RPC, aucune cause, aucune autorité métier supplémentaire.
+ok('corr : « Il n’en reste plus » = simple sortie (aucune mutation, aucun onConfirm)',
+  /onPress=\{onGoToUpdate\}/.test(corr) && (corr.match(/onConfirm\?\./g) || []).length === 1 && !/rpc|supabase/i.test(corr));
+ok('§INTENT wiring : onGoToUpdate → openStockUpdate(it, \'EMPTY\') (aucun apply/set RPC sur ce chemin)',
+  /onGoToUpdate=\{\(\) => \{ const it = correctItem; setCorrectItem\(null\); openStockUpdate\(it, 'EMPTY'\); \}\}/.test(fridge));
+ok('§INTENT openStockUpdate = pré-sélection UI SEULE (setUpdateInitialLevel + setUpdateItem, rien d’autre)',
+  /const openStockUpdate = \(item, initialLevel = null\) => \{ setUpdateInitialLevel\(initialLevel\); setUpdateItem\(item\); \};/.test(fridge));
+ok('§INTENT toute ouverture déclare son intention (défaut null) → aucun EMPTY résiduel sur un tap normal',
+  /openStockUpdate = \(item, initialLevel = null\)/.test(fridge) && (fridge.match(/openStockUpdate\(/g) || []).length === 4);
+ok('§INTENT sheet câblée sur l’état (initialRemainingLevel={updateInitialLevel})',
+  /initialRemainingLevel=\{updateInitialLevel\}/.test(fridge) && /initialRemainingLevel = null,/.test(sheet));
+ok('§INTENT sheet : pré-sélection PURE — used/waste restent false à l’ouverture',
+  /setSelected\(resolveInitialSelection\(initialRemainingLevel, baseline\)\);\s*\n\s*setUsed\(false\); setWaste\(false\);/.test(sheet));
+ok('§INTENT sheet : aucune écriture à l’ouverture (onConfirm reste réservé au CTA)',
+  (sheet.match(/onConfirm\?\./g) || []).length === 1 && !/useEffect\([^)]*onConfirm/.test(sheet));
+ok('§INTENT quitter EMPTY reset toujours les causes (pick → sanitizeCauses inchangé)', /sanitizeCauses\(level, used, waste\)/.test(sheet));
 
 console.log(`\nstockUpdateFlow.regression: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

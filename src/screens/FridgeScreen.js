@@ -115,6 +115,7 @@ export default function FridgeScreen({
   const [activeFilter, setActiveFilter]   = useState('Tous');
   const [selectedItem, setSelectedItem]   = useState(null);
   const [updateItem, setUpdateItem]       = useState(null); // produit en cours de mise à jour rapide (StockUpdateSheet)
+  const [updateInitialLevel, setUpdateInitialLevel] = useState(null); // pré-sélection UI de la sheet (intention déjà affirmée) — jamais une mutation
   const [correctItem, setCorrectItem]     = useState(null); // produit en cours de correction du reste estimé (fiche)
   const [submitBusy, setSubmitBusy]       = useState(false);
   const [editMode, setEditMode]           = useState(false);
@@ -255,6 +256,11 @@ export default function FridgeScreen({
       Alert.alert('Connexion interrompue', 'Réessaie dans un instant.');
     }
   };
+
+  // Ouverture de la SURFACE UNIQUE de mise à jour. initialLevel = niveau que l'utilisateur VIENT d'affirmer
+  // sur une autre surface (« Il n'en reste plus » → EMPTY) : simple pré-sélection d'UI, aucune écriture, aucune
+  // cause impliquée. Toute ouverture passe ici et déclare son intention (null par défaut) : aucun état résiduel.
+  const openStockUpdate = (item, initialLevel = null) => { setUpdateInitialLevel(initialLevel); setUpdateItem(item); };
 
   // CTA final du StockUpdateSheet (V2) : remaining-first + déclarations causales QUALITATIVES optionnelles
   // (sollicitées seulement à EMPTY). UNE mutation canonique (apply_stock_update via applyStockUpdate).
@@ -508,7 +514,7 @@ export default function FridgeScreen({
                     {/* ACTION PRIMAIRE — ouvre la MÊME surface unique de mise à jour (StockUpdateSheet).
                         La fiche NE duplique PAS « utilisé/jeté » : une seule logique canonique (§22).
                         Handoff propre : on ferme la fiche AVANT d'ouvrir la sheet (pas d'empilement). */}
-                    <TouchableOpacity onPress={() => { closeModal(); setUpdateItem(item); }} activeOpacity={0.85}
+                    <TouchableOpacity onPress={() => { closeModal(); openStockUpdate(item); }} activeOpacity={0.85}
                       accessibilityRole="button" accessibilityLabel="Mettre mon stock à jour"
                       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                         paddingVertical: 16, borderRadius: 16, backgroundColor: C.green, marginBottom: 20 }}>
@@ -638,6 +644,7 @@ export default function FridgeScreen({
         onNoChange={() => setUpdateItem(null)}
         onViewProduct={() => { const it = updateItem; setUpdateItem(null); setSelectedItem(it); setDetailImgError(false); }}
         onDismiss={() => setUpdateItem(null)}
+        initialRemainingLevel={updateInitialLevel}
       />
       <RemainingCorrectionSheet
         visible={!!correctItem}
@@ -645,7 +652,7 @@ export default function FridgeScreen({
         fonts={fonts}
         submitting={submitBusy}
         onConfirm={(level) => correctItem && submitRemainingCorrection(correctItem, level)}
-        onGoToUpdate={() => { const it = correctItem; setCorrectItem(null); setUpdateItem(it); }}
+        onGoToUpdate={() => { const it = correctItem; setCorrectItem(null); openStockUpdate(it, 'EMPTY'); }}
         onDismiss={() => setCorrectItem(null)}
       />
     </>
@@ -687,7 +694,7 @@ export default function FridgeScreen({
               const d = amplifiedTemporalDays(item);
               // §4 cohérence : même tap produit → même surface (mise à jour rapide) qu'en vue normale.
               return (
-              <TouchableOpacity key={item.id} onPress={() => setUpdateItem(item)}
+              <TouchableOpacity key={item.id} onPress={() => openStockUpdate(item)}
                 style={[styles.fridgeRow, { marginBottom: 9 }]}>
                 <Text style={{ fontSize: 36, marginRight: 12 }}>{item.emoji}</Text>
                 <View style={{ flex: 1 }}>
@@ -863,7 +870,7 @@ export default function FridgeScreen({
                     isLast={idx === section.items.length - 1}
                     // §2/§22 : tap sur un produit actif → surface UNIQUE de mise à jour rapide (pas la fiche).
                     // La fiche (inspecter/corriger) reste accessible depuis « Voir la fiche produit » dans la sheet.
-                    onPress={() => setUpdateItem(item)}
+                    onPress={() => openStockUpdate(item)}
                   />
                 ))}
               </View>
