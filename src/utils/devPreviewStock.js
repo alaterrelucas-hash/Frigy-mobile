@@ -24,7 +24,7 @@
 
 import { getPrimitive } from './foodLanguage';
 
-export const DEV_PREVIEW_STOCK_ENABLED = true;
+export const DEV_PREVIEW_STOCK_ENABLED = false;
 
 // Deux jeux de démonstration distincts, sans duplication d'assets (les deux passent
 // par le registry Food Language) :
