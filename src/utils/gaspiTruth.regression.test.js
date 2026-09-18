@@ -33,30 +33,31 @@ ok('FRIDGE aucun écrivain shopping_items (waste ne touche pas Courses)', !fridg
 // PA-01 : un accès GÉNÉRIQUE aux Courses (navigation explicite depuis l'en-tête Mon Stock) est AUTORISÉ.
 // L'invariant N6-12 protégé n'est PAS « FridgeScreen ignore onShopping » mais « le flux conso/gaspi ne
 // déclenche JAMAIS d'intention d'achat » : consumeItem ne référence pas onShopping (WASTED ≠ TO-BUY).
-const consumePath = (fridge.match(/const consumeItem = async[\s\S]*?\n  \};/) || [''])[0];
-ok('FRIDGE conso/gaspi ne navigue PAS vers Courses (consumeItem sans onShopping)', consumePath.length > 0 && !consumePath.includes('onShopping'));
+// Mise à jour de stock canonique (single-sheet) : le flux conso/gaspi ne déclenche JAMAIS d'intention d'achat.
+const su = (fridge.match(/const submitStockUpdate = async[\s\S]*?\n  \};/) || [''])[0];
+ok('FRIDGE conso/gaspi ne navigue PAS vers Courses (submitStockUpdate sans onShopping)', su.length > 0 && !su.includes('onShopping'));
 
-// ── Autorité d'écriture consume/waste : preuve canonique AVANT représentation ──
-const ci = (fridge.match(/const consumeItem = async[\s\S]*?\n  \};/) || [''])[0];
-ok('WRITE consumeItem isolé trouvé', ci.length > 0);
-ok('WRITE update avec preuve de ligne (.select(\'id\'))', ci.includes(".update({ consumed: true, wasted }).eq('id', item.id).select('id')") || fridge.includes(".update({ consumed: true, wasted }).eq('id', item.id).select('id')"));
-ok('WRITE via coordinateur (createConsumeCoordinator)', fridge.includes('createConsumeCoordinator'));
-ok('WRITE garde synchrone anti double-action (isBusy)', ci.includes('coord.isBusy()') || ci.includes('.isBusy()'));
+// ── Autorité d'écriture canonique (apply_partial_outcome) : preuve AVANT représentation ──
+ok('WRITE submitStockUpdate isolé trouvé', su.length > 0);
+ok('WRITE mutation canonique V2 (applyStockUpdate) — plus d\'items.update({consumed,wasted})',
+  su.includes('applyStockUpdate(supabase') && !fridge.includes('update({ consumed: true, wasted'));
+ok('WRITE convergence : plus de consumeItem/coordinateur', !fridge.includes('consumeItem') && !fridge.includes('createConsumeCoordinator'));
+ok('WRITE garde synchrone anti double-action (submitBusy)', su.includes('if (submitBusy) return'));
 // Ordre : la classification (r.ok) précède le retrait / la fermeture / l'analytics.
-const iGuard   = ci.indexOf('if (!r.ok)');
-const iRemove  = ci.indexOf('updateItems(p => p.filter(x => x.id !== item.id))');
-const iClose   = ci.indexOf('setSelectedItem(null)');
-const iCapture = ci.indexOf('posthog.capture(');
+const iGuard   = su.indexOf('if (!r.ok)');
+const iRemove  = su.indexOf('updateItems(p => p.filter(x => x.id !== item.id))');
+const iClose   = su.indexOf('setUpdateItem(null)');
+const iCapture = su.indexOf('posthog.capture(');
 ok('WRITE preuve (!r.ok) AVANT retrait de l\'item', iGuard > 0 && iRemove > 0 && iGuard < iRemove);
-ok('WRITE preuve AVANT fermeture modale', iGuard > 0 && iClose > 0 && iGuard < iClose);
+ok('WRITE preuve AVANT fermeture de la sheet', iGuard > 0 && iClose > 0 && iGuard < iClose);
 ok('WRITE analytics APRÈS la preuve (jamais sur échec)', iGuard > 0 && iCapture > 0 && iGuard < iCapture);
-// Pas de retrait optimiste : aucun updateItems(filter) AVANT l'await coord.run.
-const iRun = ci.indexOf('await coord.run(');
-ok('WRITE aucun retrait optimiste avant la mutation', iRun > 0 && (iRemove === -1 || iRun < iRemove));
-// Échec : feedback neutre réessayable ; l'item reste (return avant retrait).
-ok('WRITE échec → feedback neutre réessayable', ci.includes('enregistrer cette action') && ci.includes('Réessaie'));
-// Boutons non-actionnables pendant la mutation.
-ok('WRITE boutons désactivés pendant la mutation (consumeBusy)', fridge.includes('disabled={consumeBusy}'));
+// Pas de retrait optimiste : aucun updateItems(filter) AVANT l'await applyPartialOutcome.
+const iAwait = su.indexOf('await applyStockUpdate(');
+ok('WRITE aucun retrait optimiste avant la mutation', iAwait > 0 && (iRemove === -1 || iAwait < iRemove));
+// Échec : feedback neutre réessayable (jamais de faux succès), l'item reste (return avant retrait).
+ok('WRITE échec → feedback neutre réessayable', su.includes('onOutcomeFailure') && fridge.includes('Réessaie'));
+// CTA non-actionnable pendant la mutation (submitting=submitBusy propagé à la sheet).
+ok('WRITE CTA désactivé pendant la mutation (submitting=submitBusy)', fridge.includes('submitting={submitBusy}'));
 
 // ── Aucune conséquence commerciale / repurchase depuis le gaspillage ──
 ok('NO repurchase copy (racheter/à racheter/il en faut/manquant)', !fridge.includes('acheter') && !shop.includes('Racheter') && !shop.includes('à racheter'));

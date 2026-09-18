@@ -193,25 +193,23 @@ export default function ProfileScreen({ profileName, user, familyId, entitlement
 
   useEffect(() => {
     if (!familyId) return;
-    // N6-10 (2.6) : on ne lit QUE `wasted` (pas `price` → aucun vecteur monétaire), et AUCUNE fenêtre
-    // temporelle. `items.updated_at` est un timestamp technique de dernière modification (trigger prod
-    // trg_items_updated_at → now()), PAS l'instant de l'événement consommation/gaspillage → il ne peut
-    // pas fonder une revendication « cette semaine ». Seuls des comptes GLOBAUX de faits enregistrés.
-    supabase.from('items').select('wasted').eq('family_id', familyId).eq('consumed', true)
+    // V2 : on lit les DÉCLARATIONS canoniques (used_declared / waste_declared), pas l'inverse du legacy
+    // `wasted`. Aucune fenêtre temporelle, aucun prix. Les deux comptes peuvent se chevaucher (mixte).
+    supabase.from('items').select('used_declared, waste_declared').eq('family_id', familyId).eq('consumed', true)
       .then(({ data: allData }) => {
         if (!allData) return;
         setStats(computeProfileStats(allData));
       });
   }, [familyId]);
 
-  // N6-10 (CR-11/12/13/14) : uniquement des faits ENREGISTRÉS au niveau foyer, GLOBAUX (aucune fenêtre
-  // temporelle). AUCUN argent, CO₂, score/grade, comparaison. Compte = lignes (cohortes), pas unités.
-  const recordedCount      = stats?.recordedConsumptions ?? 0;
-  const declaredWasteCount = stats?.declaredWaste        ?? 0;
+  // V2 (CR-11/12/13/14) : faits ENREGISTRÉS au foyer, GLOBAUX. Déclarations qualitatives QUI PEUVENT SE
+  // CHEVAUCHER (un mixte compte dans les deux). AUCUN argent/CO₂/score/comparaison, aucune quantité physique.
+  const usedCount  = stats?.usedDeclaredCount  ?? 0;
+  const wasteCount = stats?.wasteDeclaredCount ?? 0;
 
   const statsData = [
-    { id: 'recorded', label: 'Consommations enregistrées', value: recordedCount,      Icon: Leaf,   colorKey: 'green', info: 'Produits marqués consommés et non déclarés gaspillés (au niveau du foyer). Ce n\'est ni une preuve de sauvetage ni une quantité physique.' },
-    { id: 'waste',    label: 'Gaspillages déclarés',        value: declaredWasteCount, Icon: Trash2, colorKey: 'red',   info: 'Produits que tu as déclarés jetés.' },
+    { id: 'used',  label: 'Utilisations déclarées', value: usedCount,  Icon: Leaf,   colorKey: 'green', info: 'Produits pour lesquels tu as déclaré un usage. Un même produit peut apparaître dans les deux si une partie a été utilisée et une partie jetée. Ce n\'est ni une preuve de sauvetage ni une quantité physique.' },
+    { id: 'waste', label: 'Gaspillages déclarés',   value: wasteCount, Icon: Trash2, colorKey: 'red',   info: 'Produits pour lesquels tu as déclaré un gaspillage. Un même produit peut aussi compter comme utilisé. « Non déclaré » ne prouve pas qu\'il n\'y a pas eu de gaspillage.' },
   ];
 
   const handlePickAvatar = async () => {

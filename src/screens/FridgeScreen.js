@@ -3,9 +3,9 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, Imag
 import * as Haptics from 'expo-haptics';
 import {
   Search,
-  ChevronLeft,
+  ChevronLeft, ChevronRight,
   Package,
-  CalendarDays, AlertTriangle,
+  CalendarDays, AlertTriangle, MapPin, PieChart, Tag,
   Sparkles, Euro, Utensils, Trash2, Pencil, Inbox, PackageOpen, Plus,
 } from 'lucide-react-native';
 import { supabase } from '../config/supabase';
@@ -19,7 +19,11 @@ import { passiveTemporalDays, amplifiedTemporalDays } from '../utils/temporalAut
 import { useStockTheme } from '../utils/stockTheme';
 import { DEV_PREVIEW_STOCK_ENABLED, DEV_PREVIEW_MODE, getDevPreviewItems, getVisualQAItems } from '../utils/devPreviewStock'; // DEV-ONLY — voir ce fichier pour retirer
 import { resolveFoodImage } from '../utils/foodLanguage';
-import { createConsumeCoordinator } from '../utils/consumptionOutcome';
+import StockUpdateSheet from '../components/stock/StockUpdateSheet';
+import RemainingCorrectionSheet from '../components/stock/RemainingCorrectionSheet';
+import { applyStockUpdate, setApproximateRemainingLevel } from '../utils/partialOutcomeMutation';
+import { makeClientEventId, remainingLabel } from '../utils/stockUpdateSheetLogic';
+import { explicitDateType } from '../utils/captureProvenance';
 import { styles } from '../styles';
 import StorageScopeControl from '../components/StorageScopeControl';
 import InventoryProductRow from '../components/InventoryProductRow';
@@ -110,7 +114,11 @@ export default function FridgeScreen({
   const [q, setQ]                         = useState('');
   const [activeFilter, setActiveFilter]   = useState('Tous');
   const [selectedItem, setSelectedItem]   = useState(null);
+  const [updateItem, setUpdateItem]       = useState(null); // produit en cours de mise à jour rapide (StockUpdateSheet)
+  const [correctItem, setCorrectItem]     = useState(null); // produit en cours de correction du reste estimé (fiche)
+  const [submitBusy, setSubmitBusy]       = useState(false);
   const [editMode, setEditMode]           = useState(false);
+  const [editField, setEditField]         = useState(null); // 'identity'|'date'|'location' — éditeur FOCALISÉ (une info à la fois)
   const [editFields, setEditFields]       = useState({});
   const [detailImgError, setDetailImgError] = useState(false);
   const [localItems, setLocalItems]       = useState(items);
@@ -167,8 +175,11 @@ export default function FridgeScreen({
   };
 
   /* ── CRUD ── */
-  const openEdit = (item) => {
+  // Éditeur FOCALISÉ (§3) : on n'ouvre QUE le champ touché (identity = nom + emoji ; date ; location).
+  // La persistance reste partagée (saveEdit) — les autres champs, non rendus, gardent leur valeur d'origine.
+  const openEdit = (item, field = 'identity') => {
     setEditFields({ name: item.name, emoji: item.emoji || '🛒', dlcInput: item.dlc && item.dlc !== '—' ? item.dlc : '', location: item.location });
+    setEditField(field);
     setEditMode(true);
   };
 
@@ -198,60 +209,99 @@ export default function FridgeScreen({
     };
     updateItems(p => p.map(x => x.id === selectedItem.id ? remap(x) : x));
     setSelectedItem(prev => remap(prev));
-    setEditMode(false);
+    setEditMode(false); setEditField(null);
     await supabase.from('items').update(updates).eq('id', selectedItem.id);
   };
 
-  // N6-12 (CR-10 + Waste Write Authority) : PERSISTANCE D'ABORD. Un résultat consommé/gaspillé n'est
-  // représenté (retrait du stock actif + fermeture modale + analytics) qu'APRÈS une preuve canonique
-  // exacte (erreur nulle + 1 ligne dont l'id correspond ; `.select('id')`). Échec/zéro-ligne → l'item
-  // RESTE, la modale reste réessayable, AUCUN event analytics. Verrou synchrone : un 2e tap pendant la
-  // requête ne déclenche PAS de 2e mutation. Même autorité pour « J'ai mangé ça » et « Gaspillé ».
-  const consumeCoordRef = useRef(null);
-  if (!consumeCoordRef.current) {
-    consumeCoordRef.current = createConsumeCoordinator({
-      mutate: (item, wasted) =>
-        supabase.from('items').update({ consumed: true, wasted }).eq('id', item.id).select('id'),
-    });
-  }
-  const [consumeBusy, setConsumeBusy] = useState(false);
-
-  const consumeItem = async (item, wasted = false) => {
-    const coord = consumeCoordRef.current;
-    if (coord.isBusy()) return; // garde synchrone anti double-action
-    setConsumeBusy(true);
-    Haptics.impactAsync(wasted ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
-    const r = await coord.run(item, wasted);
-    setConsumeBusy(false);
-    if (r.skipped) return;
-    if (!r.ok) {
-      Alert.alert('Impossible d\'enregistrer cette action', 'Réessaie.');
-      return; // item conservé, modale ouverte, aucun analytics
-    }
-    // Succès canonique prouvé → alors seulement représenter l'issue.
-    updateItems(p => p.filter(x => x.id !== item.id));
-    setSelectedItem(null);
-    posthog.capture(wasted ? 'product_wasted' : 'product_consumed', {
-      name: item.name, category: item.category, days_left: item.days,
-      location: item.location, price: item.price || null,
-    });
+  // MISE À JOUR CANONIQUE — SOURCE DE VÉRITÉ UNIQUE. Toute issue (partielle OU clôture totale) passe par
+  // l'RPC apply_partial_outcome via le wrapper canonique : AUCUN items.update({consumed,wasted}) parallèle
+  // ici (fin des deux écritures concurrentes). EMPTY converge vers la clôture TOTALE (consumed=true ;
+  // wasted si WASTED ; remaining_level='EMPTY') → plus jamais de HALF résiduel sur une ligne fermée.
+  // Partiel → la ligne RESTE active. clientEventId : id STABLE par intention (même payload) → réutilisé au
+  // retry réseau (idempotence DB déjà en place) ; un payload différent obtient un nouvel id.
+  const submitRef = useRef(null); // { key, id }
+  const clientEventIdFor = (itemId, remainingLevel, usedDeclared, wasteDeclared) => {
+    const key = `${itemId}|${remainingLevel}|${usedDeclared}|${wasteDeclared}`;
+    if (submitRef.current && submitRef.current.key === key) return submitRef.current.id; // retry même intention (même payload)
+    const id = makeClientEventId(itemId);
+    submitRef.current = { key, id };
+    return id;
   };
 
-  const decrementUnit = async (item) => {
-    const newQty = (item.quantity || 1) - 1;
-    if (newQty <= 0) {
-      Alert.alert('Épuisé !', `Dernier ${item.name} utilisé. Le marquer comme consommé ?`, [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Consommé ✅', onPress: async () => {
-          updateItems(p => p.filter(x => x.id !== item.id));
-          await supabase.from('items').update({ consumed: true }).eq('id', item.id);
-        }},
-      ]);
+  // Recharge la vérité serveur d'une ligne (baseline après conflit / fermeture concurrente). Best-effort.
+  const refreshItem = async (itemId) => {
+    const { data } = await supabase.from('items').select('*').eq('id', itemId).maybeSingle();
+    if (!data) return null;
+    if (data.consumed) updateItems(p => p.filter(x => x.id !== itemId));
+    else updateItems(p => p.map(x => x.id === itemId ? { ...x, ...data, days: data.days_left } : x));
+    return data;
+  };
+
+  // Échecs — messages calmes, jamais de faux succès. Réseau → sélections + même clientEventId conservés.
+  const onOutcomeFailure = (reason, item) => {
+    const msg = String(reason || '');
+    if (/INCREASE_NOT_ALLOWED/.test(msg)) {
+      refreshItem(item.id);
+      Alert.alert('Vérifie la quantité', 'Ton stock a peut-être changé. Regarde ce qu’il reste et réessaie.');
+    } else if (/ITEM_ALREADY_CLOSED/.test(msg)) {
+      refreshItem(item.id); setUpdateItem(null); setCorrectItem(null);
+      Alert.alert('Déjà à jour', 'Ce produit n’est plus dans ton stock actif.');
+    } else if (/NOT_AUTHORIZED|NOT_AUTHENTICATED/.test(msg)) {
+      Alert.alert('Impossible de mettre à jour', 'Cette mise à jour n’a pas pu être enregistrée.');
+    } else if (/IDEMPOTENCY_MISMATCH/.test(msg)) {
+      submitRef.current = null; // ne PAS retenter avec le même token
+      Alert.alert('Réessaie', 'Un souci de synchronisation est survenu. Réessaie.');
     } else {
-      updateItems(p => p.map(x => x.id === item.id ? { ...x, quantity: newQty } : x));
-      await supabase.from('items').update({ quantity: newQty }).eq('id', item.id);
+      Alert.alert('Connexion interrompue', 'Réessaie dans un instant.');
     }
   };
+
+  // CTA final du StockUpdateSheet (V2) : remaining-first + déclarations causales QUALITATIVES optionnelles
+  // (sollicitées seulement à EMPTY). UNE mutation canonique (apply_stock_update via applyStockUpdate).
+  const submitStockUpdate = async (item, { remainingLevel, usedDeclared = false, wasteDeclared = false } = {}) => {
+    if (submitBusy) return; // garde anti double-tap
+    setSubmitBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const beforeLevel = item.remaining_level != null ? item.remaining_level : null;
+    const clientEventId = clientEventIdFor(item.id, remainingLevel, usedDeclared, wasteDeclared);
+    const r = await applyStockUpdate(supabase, { itemId: item.id, remainingLevel, usedDeclared, wasteDeclared, beforeLevel, clientEventId });
+    setSubmitBusy(false);
+    if (!r.ok) { onOutcomeFailure(r.reason, item); return; } // sheet reste ouverte, sélections conservées
+    submitRef.current = null;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const returned = r.item && r.item.id ? r.item : null;
+    const closes = (r.effect && r.effect.closesRow) || remainingLevel === 'EMPTY';
+    if (closes) {
+      updateItems(p => p.filter(x => x.id !== item.id));
+      // Analytics V2 : UNE clôture, déclarations QUALITATIVES. Jamais de %/€/g ni double comptage d'un mixte.
+      posthog.capture('stock_closed', { before_level: beforeLevel, after_level: 'EMPTY', used_declared: usedDeclared, waste_declared: wasteDeclared, name: item.name, category: item.category });
+    } else {
+      const patch = returned ? { ...returned, days: returned.days_left } : { remaining_level: remainingLevel };
+      updateItems(p => p.map(x => x.id === item.id ? { ...x, ...patch } : x));
+      posthog.capture('stock_remaining_updated', { before_level: beforeLevel, after_level: remainingLevel, name: item.name, category: item.category });
+    }
+    setUpdateItem(null);
+  };
+
+  // Correction directe du reste estimé depuis la fiche (CORRECTED — jamais consommation/gaspillage).
+  const submitRemainingCorrection = async (item, level) => {
+    if (submitBusy) return;
+    setSubmitBusy(true);
+    const clientEventId = makeClientEventId(item.id);
+    const r = await setApproximateRemainingLevel(supabase, { itemId: item.id, level, clientEventId });
+    setSubmitBusy(false);
+    if (!r.ok) { onOutcomeFailure(r.reason, item); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const returned = r.item && r.item.id ? r.item : null;
+    const patch = returned ? { ...returned, days: returned.days_left } : { remaining_level: level };
+    updateItems(p => p.map(x => x.id === item.id ? { ...x, ...patch } : x));
+    setSelectedItem(prev => (prev && prev.id === item.id ? { ...prev, ...patch } : prev));
+    setCorrectItem(null);
+    posthog.capture('product_remaining_corrected', { level, name: item.name });
+  };
+
+  // (decrementUnit retiré : fonction MORTE sans appelant, qui contenait un `update({consumed:true})`
+  //  non canonique. La clôture totale passe désormais UNIQUEMENT par apply_partial_outcome(…, EMPTY).)
 
   const toggleOpened = async (item, newVal) => {
     const today = new Date();
@@ -280,6 +330,29 @@ export default function FridgeScreen({
     await supabase.from('items').update(updates).eq('id', item.id);
   };
 
+  // STK-02 (CORRECTION ≠ CONSOMMATION/GASPILLAGE) : retirer une ENTRÉE ERRONÉE (doublon, mauvais produit,
+  // saisie fautive) SANS la déclarer consommée ni gaspillée — sinon on fabriquerait un faux événement qui
+  // polluerait les compteurs Profile (recordedConsumptions/declaredWaste). Distinct de la mise à jour de
+  // stock canonique : n'écrit NI `consumed` NI `wasted`, aucun event causal (event neutre `product_removed`).
+  // Confirmation destructive obligatoire ; suppression prouvée d'abord (erreur → entrée conservée) puis
+  // retrait UI + fermeture. Aucune économie / aucun impact déduit.
+  const deleteItem = (item) => {
+    Alert.alert(
+      'Supprimer cette entrée ?',
+      'On retire cette entrée de ton stock. Ce n’est ni consommé ni gaspillé.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: async () => {
+          const { error } = await supabase.from('items').delete().eq('id', item.id);
+          if (error) { Alert.alert('Impossible de supprimer', 'Réessaie.'); return; }
+          updateItems(p => p.filter(x => x.id !== item.id));
+          setSelectedItem(null);
+          posthog.capture('product_removed', { name: item.name, category: item.category, location: item.location });
+        } },
+      ],
+    );
+  };
+
   /* ── Detail modal (inline call to avoid remount) ── */
   const DetailModal = () => {
     if (!selectedItem) return null;
@@ -294,7 +367,12 @@ export default function FridgeScreen({
     // type de date supporté (amplifiedTemporalDays). Type inconnu → pas de badge coloré fort
     // (la date factuelle reste visible via dlcFormatted plus bas — relation neutre préservée).
     const detailDays = amplifiedTemporalDays(item);
-    const closeModal = () => { setSelectedItem(null); setEditMode(false); };
+    // §26 : interprétation DLC/DDM affichée UNIQUEMENT si le TYPE de date est autoritaire (N6-08). Type
+    // inconnu → jamais « DLC »/« DDM »/« expiration » fabriqué. Réutilise explicitDateType (temporalAuthority/N6).
+    const dtype = explicitDateType(item);
+    // §27 : « Reste estimé » = état APPROXIMATIF (remaining_level), jamais une quantité exacte. NULL → « Non renseigné ».
+    const restLabel = remainingLabel(item.remaining_level != null ? item.remaining_level : null);
+    const closeModal = () => { setSelectedItem(null); setEditMode(false); setEditField(null); };
 
     return (
       <Modal visible animationType="slide" transparent onRequestClose={closeModal}>
@@ -309,65 +387,83 @@ export default function FridgeScreen({
 
                 {editMode && (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <TouchableOpacity onPress={() => setEditMode(false)}
+                    <TouchableOpacity onPress={() => { setEditMode(false); setEditField(null); }}
                       style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: C.border }}>
                       <Text style={{ fontSize: 14, fontWeight: '600', color: C.t2 }}>Annuler</Text>
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.t1 }}>Modifier</Text>
+                    {/* Titre = champ FOCALISÉ (jamais un « Modifier » global). */}
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.t1 }}>
+                      {editField === 'date' ? 'Modifier la date' : editField === 'location' ? 'Modifier l’emplacement' : 'Modifier le nom'}
+                    </Text>
                     <TouchableOpacity onPress={saveEdit}
                       style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.green, borderRadius: 20 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Sauvegarder</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Enregistrer</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
                 {editMode ? (
                   <View style={{ marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                      <View style={{ width: 64 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>EMOJI</Text>
-                        <TextInput value={editFields.emoji} onChangeText={v => setEditFields(p => ({ ...p, emoji: v }))}
-                          style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 10,
-                            fontSize: 28, textAlign: 'center', backgroundColor: '#FAFAFA' }} maxLength={2} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>NOM</Text>
-                        <TextInput value={editFields.name} onChangeText={v => setEditFields(p => ({ ...p, name: v }))}
-                          style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 11,
-                            fontSize: 15, color: C.t1, backgroundColor: '#FAFAFA' }} />
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE LIMITE (DLC)</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                      <TextInput value={editFields.dlcInput}
-                        onChangeText={t => setEditFields(p => ({ ...p, dlcInput: formatDlcInput(t) }))}
-                        placeholder="JJ/MM/AAAA" placeholderTextColor={C.t4}
-                        keyboardType="numeric" maxLength={10} returnKeyType="done"
-                        style={{ flex: 1, borderWidth: 1.5,
-                          borderColor: parseDlc(editFields.dlcInput) !== null ? C.green : C.border,
-                          borderRadius: 10, padding: 11, fontSize: 15, color: C.t1, backgroundColor: '#FAFAFA' }} />
-                      {parseDlc(editFields.dlcInput) !== null && (
-                        <View style={{ paddingHorizontal: 12, paddingVertical: 9,
-                          backgroundColor: urgBg(parseDlc(editFields.dlcInput)), borderRadius: 10 }}>
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>J-{parseDlc(editFields.dlcInput)}</Text>
+                    {/* §3 ÉDITEUR FOCALISÉ : on ne rend QUE le champ touché. Nom + emoji vont ensemble
+                        (identité visuelle du produit, §25). Date et Emplacement sont isolés. */}
+                    {editField === 'identity' && (
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 4 }}>
+                        <View style={{ width: 64 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>EMOJI</Text>
+                          <TextInput value={editFields.emoji} onChangeText={v => setEditFields(p => ({ ...p, emoji: v }))}
+                            accessibilityLabel="Emoji du produit"
+                            style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 10,
+                              fontSize: 28, textAlign: 'center', backgroundColor: '#FAFAFA' }} maxLength={2} />
                         </View>
-                      )}
-                    </View>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>EMPLACEMENT</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {LOC_ITEMS.map(l => {
-                        const active = editFields.location === l.id;
-                        return (
-                          <TouchableOpacity key={l.id} onPress={() => setEditFields(p => ({ ...p, location: l.id }))}
-                            style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12,
-                              borderWidth: 1.5, borderColor: active ? C.green : C.border,
-                              backgroundColor: active ? `${C.green}12` : '#FAFAFA' }}>
-                            <l.Icon size={20} color={active ? C.green : C.t3} strokeWidth={active ? 2.5 : 1.8} style={{ marginBottom: 2 }} />
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: active ? C.green : C.t3 }}>{l.id}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>NOM</Text>
+                          <TextInput value={editFields.name} onChangeText={v => setEditFields(p => ({ ...p, name: v }))}
+                            accessibilityLabel="Nom du produit" autoFocus
+                            style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 11,
+                              fontSize: 15, color: C.t1, backgroundColor: '#FAFAFA' }} />
+                        </View>
+                      </View>
+                    )}
+                    {editField === 'date' && (
+                      <>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>DATE LIMITE (DLC)</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                          <TextInput value={editFields.dlcInput}
+                            onChangeText={t => setEditFields(p => ({ ...p, dlcInput: formatDlcInput(t) }))}
+                            placeholder="JJ/MM/AAAA" placeholderTextColor={C.t4} accessibilityLabel="Date du produit" autoFocus
+                            keyboardType="numeric" maxLength={10} returnKeyType="done"
+                            style={{ flex: 1, borderWidth: 1.5,
+                              borderColor: parseDlc(editFields.dlcInput) !== null ? C.green : C.border,
+                              borderRadius: 10, padding: 11, fontSize: 15, color: C.t1, backgroundColor: '#FAFAFA' }} />
+                          {parseDlc(editFields.dlcInput) !== null && (
+                            <View style={{ paddingHorizontal: 12, paddingVertical: 9,
+                              backgroundColor: urgBg(parseDlc(editFields.dlcInput)), borderRadius: 10 }}>
+                              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>J-{parseDlc(editFields.dlcInput)}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </>
+                    )}
+                    {editField === 'location' && (
+                      <>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: C.t3, marginBottom: 6 }}>EMPLACEMENT</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {LOC_ITEMS.map(l => {
+                            const active = editFields.location === l.id;
+                            return (
+                              <TouchableOpacity key={l.id} onPress={() => setEditFields(p => ({ ...p, location: l.id }))}
+                                accessibilityRole="button" accessibilityLabel={l.id} accessibilityState={{ selected: active }}
+                                style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12,
+                                  borderWidth: 1.5, borderColor: active ? C.green : C.border,
+                                  backgroundColor: active ? `${C.green}12` : '#FAFAFA' }}>
+                                <l.Icon size={20} color={active ? C.green : C.t3} strokeWidth={active ? 2.5 : 1.8} style={{ marginBottom: 2 }} />
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: active ? C.green : C.t3 }}>{l.id}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
                   </View>
                 ) : (
                   <>
@@ -409,37 +505,69 @@ export default function FridgeScreen({
                       </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-                      <TouchableOpacity onPress={() => consumeItem(item, false)} disabled={consumeBusy}
-                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: `${C.green}18`, opacity: consumeBusy ? 0.5 : 1 }}>
-                        <Utensils size={26} color={C.green} strokeWidth={2} style={{ marginBottom: 6 }} />
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: C.green }}>J'ai mangé ça</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => consumeItem(item, true)} disabled={consumeBusy}
-                        style={{ flex: 1, alignItems: 'center', paddingVertical: 20, borderRadius: 18, backgroundColor: '#FF3B3018', opacity: consumeBusy ? 0.5 : 1 }}>
-                        <Trash2 size={26} color={C.red} strokeWidth={2} style={{ marginBottom: 6 }} />
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: C.red }}>Gaspillé</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity onPress={() => openEdit(item)}
+                    {/* ACTION PRIMAIRE — ouvre la MÊME surface unique de mise à jour (StockUpdateSheet).
+                        La fiche NE duplique PAS « utilisé/jeté » : une seule logique canonique (§22).
+                        Handoff propre : on ferme la fiche AVANT d'ouvrir la sheet (pas d'empilement). */}
+                    <TouchableOpacity onPress={() => { closeModal(); setUpdateItem(item); }} activeOpacity={0.85}
+                      accessibilityRole="button" accessibilityLabel="Mettre mon stock à jour"
                       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, marginBottom: 20 }}>
-                      <Pencil size={16} color={C.t2} strokeWidth={2} />
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: C.t2 }}>Modifier ce produit</Text>
+                        paddingVertical: 16, borderRadius: 16, backgroundColor: C.green, marginBottom: 20 }}>
+                      <Utensils size={18} color="#fff" strokeWidth={2} />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Mettre mon stock à jour</Text>
                     </TouchableOpacity>
 
+                    {/* INFORMATIONS — « touche l'info que tu veux corriger » (§24). Nom/Emplacement/Date ouvrent
+                        l'éditeur direct existant (saveEdit, capacités préservées). Reste estimé ouvre la
+                        correction bornée (CORRECTED). Ouvert = interrupteur direct. Quantité (autorité exacte,
+                        N6-07) et Prix restent en lecture. Plus de bouton global « Modifier ce produit » (§23). */}
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: C.t3, letterSpacing: 0.8, marginBottom: 8 }}>INFORMATIONS</Text>
                     <View style={{ borderRadius: 16, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
-                      {dlcFormatted && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
-                          borderBottomWidth: 1, borderBottomColor: C.border }}>
-                          <CalendarDays size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
-                          <Text style={{ flex: 1, fontSize: 14, color: C.t2 }}>Date d'expiration</Text>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>{dlcFormatted}</Text>
+                      {/* Nom → éditeur direct */}
+                      <TouchableOpacity onPress={() => openEdit(item, 'identity')} activeOpacity={0.6}
+                        accessibilityRole="button" accessibilityLabel={`Nom, ${item.name}, modifier`}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <Tag size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                        <Text style={{ fontSize: 14, color: C.t2 }}>Nom</Text>
+                        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '600', color: C.t1, marginRight: 6 }} numberOfLines={1}>{item.name}</Text>
+                        <ChevronRight size={16} color={C.t4} strokeWidth={2} />
+                      </TouchableOpacity>
+                      {/* Emplacement → éditeur direct */}
+                      <TouchableOpacity onPress={() => openEdit(item, 'location')} activeOpacity={0.6}
+                        accessibilityRole="button" accessibilityLabel={`Emplacement, ${item.location}, modifier`}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <MapPin size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                        <Text style={{ fontSize: 14, color: C.t2 }}>Emplacement</Text>
+                        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '600', color: C.t1, marginRight: 6 }}>{item.location}</Text>
+                        <ChevronRight size={16} color={C.t4} strokeWidth={2} />
+                      </TouchableOpacity>
+                      {/* Date → éditeur direct. Valeur brute + interprétation SEULEMENT si type autoritaire (§26). */}
+                      <TouchableOpacity onPress={() => openEdit(item, 'date')} activeOpacity={0.6}
+                        accessibilityRole="button" accessibilityLabel={`Date, ${dlcFormatted || 'non renseignée'}, modifier`}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <CalendarDays size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                        <Text style={{ fontSize: 14, color: C.t2 }}>Date</Text>
+                        <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 6 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: dlcFormatted ? C.t1 : C.t4 }}>{dlcFormatted || 'Non renseignée'}</Text>
+                          {dtype && dlcFormatted && (
+                            <Text style={{ fontSize: 11, color: C.t4, marginTop: 1 }}>
+                              {dtype}{detailDays !== null && detailDays < 0 ? ' · dépassée — vérifier' : ''}
+                            </Text>
+                          )}
                         </View>
-                      )}
+                        <ChevronRight size={16} color={C.t4} strokeWidth={2} />
+                      </TouchableOpacity>
+                      {/* Reste estimé → correction bornée (CORRECTED, jamais consommation/gaspillage). NULL → « Non renseigné ». */}
+                      <TouchableOpacity onPress={() => { closeModal(); setCorrectItem(item); }} activeOpacity={0.6}
+                        accessibilityRole="button" accessibilityLabel={`Reste estimé, ${restLabel}, corriger`}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <PieChart size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
+                        <Text style={{ fontSize: 14, color: C.t2 }}>Reste estimé</Text>
+                        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '600', color: item.remaining_level != null ? C.t1 : C.t4, marginRight: 6 }}>{restLabel}</Text>
+                        <ChevronRight size={16} color={C.t4} strokeWidth={2} />
+                      </TouchableOpacity>
+                      {/* Ouvert — interrupteur direct (contrat opened inchangé). */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
-                        borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        borderBottomWidth: (quantityLabel || item.price) ? 1 : 0, borderBottomColor: C.border }}>
                         <PackageOpen size={18} color={item.opened ? C.green : C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 14, color: C.t2 }}>Ouvert</Text>
@@ -457,15 +585,15 @@ export default function FridgeScreen({
                           ios_backgroundColor={C.border}
                         />
                       </View>
-
+                      {/* Quantité — AUTORITÉ EXACTE (N6-07), distincte du reste estimé ; affichée seulement si KNOWN. */}
                       {quantityLabel && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14,
                           borderBottomWidth: item.price ? 1 : 0, borderBottomColor: C.border }}>
                           <Package size={18} color={C.t3} strokeWidth={1.8} style={{ marginRight: 12 }} />
-                          <Text style={{ flex: 1, fontSize: 14, color: C.t2 }}>Quantité</Text>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>
-                            {quantityLabel}
-                          </Text>
+                          {/* §5 : autorité EXACTE au moment de l'ajout (jamais décrémentée), DISTINCTE du reste
+                              estimé approximatif. Libellé précis pour ne pas confondre les deux vérités. */}
+                          <Text style={{ flex: 1, fontSize: 14, color: C.t2 }}>Quantité ajoutée</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: C.t1 }}>{quantityLabel}</Text>
                         </View>
                       )}
                       {item.price && (
@@ -476,6 +604,16 @@ export default function FridgeScreen({
                         </View>
                       )}
                     </View>
+
+                    {/* STK-02 — CORRECTION : retirer une entrée erronée SANS consommer ni gaspiller. Action
+                        tertiaire destructive RETENUE (lien texte rouge, sans icône corbeille pour ne pas se
+                        confondre avec « Gaspillé » : Warm Precision, pas de gros panneau). Confirmation
+                        obligatoire ; deleteItem n'écrit ni consumed ni wasted. */}
+                    <TouchableOpacity onPress={() => deleteItem(item)} activeOpacity={0.7}
+                      accessibilityRole="button" accessibilityLabel="Supprimer cette entrée"
+                      style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 16 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: C.red }}>Supprimer cette entrée</Text>
+                    </TouchableOpacity>
                   </>
                 )}
               </View>
@@ -487,10 +625,37 @@ export default function FridgeScreen({
     );
   };
 
-  /* ── Urgent mode (inchangé) ── */
+  // Surfaces canoniques de mise à jour — montées dans TOUTES les vues (normale ET urgente) pour un
+  // comportement de tap COHÉRENT (§4). Une seule définition, rendue à deux endroits.
+  const stockSheets = (
+    <>
+      <StockUpdateSheet
+        visible={!!updateItem}
+        item={updateItem}
+        fonts={fonts}
+        submitting={submitBusy}
+        onConfirm={(payload) => updateItem && submitStockUpdate(updateItem, payload)}
+        onNoChange={() => setUpdateItem(null)}
+        onViewProduct={() => { const it = updateItem; setUpdateItem(null); setSelectedItem(it); setDetailImgError(false); }}
+        onDismiss={() => setUpdateItem(null)}
+      />
+      <RemainingCorrectionSheet
+        visible={!!correctItem}
+        item={correctItem}
+        fonts={fonts}
+        submitting={submitBusy}
+        onConfirm={(level) => correctItem && submitRemainingCorrection(correctItem, level)}
+        onGoToUpdate={() => { const it = correctItem; setCorrectItem(null); setUpdateItem(it); }}
+        onDismiss={() => setCorrectItem(null)}
+      />
+    </>
+  );
+
+  /* ── Urgent mode ── */
   if (urgentMode) return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       {DetailModal()}
+      {stockSheets}
       <View style={{ padding: 16, paddingBottom: 8 }}>
         <TouchableOpacity onPress={onExitUrgent}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 14 }}>
@@ -520,8 +685,9 @@ export default function FridgeScreen({
             {urgent.filter(i => !q || i.name.toLowerCase().includes(q.toLowerCase())).map(item => {
               // Jours affichés = projection amplifiée (DATE + type supporté), cohérente avec le set.
               const d = amplifiedTemporalDays(item);
+              // §4 cohérence : même tap produit → même surface (mise à jour rapide) qu'en vue normale.
               return (
-              <TouchableOpacity key={item.id} onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
+              <TouchableOpacity key={item.id} onPress={() => setUpdateItem(item)}
                 style={[styles.fridgeRow, { marginBottom: 9 }]}>
                 <Text style={{ fontSize: 36, marginRight: 12 }}>{item.emoji}</Text>
                 <View style={{ flex: 1 }}>
@@ -592,6 +758,9 @@ export default function FridgeScreen({
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       {DetailModal()}
+
+      {/* MISE À JOUR RAPIDE + CORRECTION du reste estimé — surfaces canoniques (voir `stockSheets`). */}
+      {stockSheets}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         <InventoryHeader
@@ -692,7 +861,9 @@ export default function FridgeScreen({
                     temporalEmphasisDays={amplifiedTemporalDays(item)}
                     focusIntensity={naturalFocusIntensity(amplifiedTemporalDays(item))}
                     isLast={idx === section.items.length - 1}
-                    onPress={() => { setSelectedItem(item); setDetailImgError(false); }}
+                    // §2/§22 : tap sur un produit actif → surface UNIQUE de mise à jour rapide (pas la fiche).
+                    // La fiche (inspecter/corriger) reste accessible depuis « Voir la fiche produit » dans la sheet.
+                    onPress={() => setUpdateItem(item)}
                   />
                 ))}
               </View>

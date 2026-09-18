@@ -21,7 +21,7 @@ const ok = (label, cond) => { if (cond) pass++; else { fail++; console.log('FAIL
 // (2.5 apparaît légitimement dans strokeWidth={2.5} → on cible l'expression monétaire, pas la constante nue)
 ok('IMPACT no price fallback (price || 2.5) supprimé', !profile.includes('price || 2.5') && !profile.includes('|| 2.5'));
 ok('IMPACT no variable savings', !/\bsavings\b/.test(profile));
-ok('IMPACT stats ne lit plus price (select wasted only)', profile.includes(".select('wasted')") && !profile.includes(".select('price"));
+ok('IMPACT stats ne lit plus price (select des déclarations canoniques V2, jamais price)', profile.includes(".select('used_declared, waste_declared')") && !profile.includes(".select('price"));
 ok('IMPACT no carte « Économies estimées »', !profile.includes('Économies estimées'));
 ok('IMPACT no symbole € affiché', !profile.includes(' €`') && !profile.includes('toFixed(0)} €'));
 
@@ -40,8 +40,11 @@ ok('IMPACT no scoreLabel', !profile.includes('scoreLabel'));
 
 // ── CR-14 SAUVÉ : plus de « produits sauvés » (consommé ≠ sauvé) ; libellé factuel ──
 ok('IMPACT no carte « Produits sauvés »', !profile.includes('Produits sauvés'));
-ok('IMPACT libellé « Consommations enregistrées » présent', profile.includes('Consommations enregistrées'));
+ok('IMPACT libellé V2 « Utilisations déclarées » présent', profile.includes('Utilisations déclarées'));
 ok('IMPACT libellé « Gaspillages déclarés » présent', profile.includes('Gaspillages déclarés'));
+// §26 : chevauchement explicité, jamais « entièrement gaspillé » ni catégories exclusives.
+ok('IMPACT overlap explicité (un même produit peut apparaître dans les deux)', profile.includes('peut apparaître dans les deux') || profile.includes('peut aussi compter comme utilisé'));
+ok('IMPACT jamais « entièrement gaspillé »', !profile.includes('entièrement gaspill'));
 
 // ── HEBDO (N6-10 2.6) : carte SUPPRIMÉE — updated_at (timestamp technique, trigger prod) ≠ instant
 //    d'événement → aucune revendication « cette semaine ». Aucun champ événementiel inventé. ──
@@ -56,8 +59,8 @@ ok('WEEKLY no vars hebdo (weekRecorded/weekDeclaredWaste/weekTotal)',
 ok('WEEKLY aucune stat Profile n\'utilise updated_at', !profile.includes('updated_at'));
 ok('WEEKLY no champ événementiel inventé (consumed_at/wasted_at)', !profile.includes('consumed_at') && !profile.includes('wasted_at'));
 // Indicateurs GLOBAUX véridiques conservés (déjà dans la grille de stats)
-ok('WEEKLY→GLOBAL consommations enregistrées globales conservées', profile.includes('recordedConsumptions'));
-ok('WEEKLY→GLOBAL gaspillages déclarés globaux conservés', profile.includes('declaredWaste'));
+ok('WEEKLY→GLOBAL utilisations déclarées globales conservées', profile.includes('usedDeclaredCount'));
+ok('WEEKLY→GLOBAL gaspillages déclarés globaux conservés', profile.includes('wasteDeclaredCount'));
 
 // ── SHARE (CR-11) : feature CONSERVÉE, message neutre (0 chiffre inventé, 0 causalité, 0 1re personne de résultat) ──
 ok('SHARE handlers conservés (WhatsApp/SMS/More)', profile.includes('handleShareWhatsApp') && profile.includes('handleShareSMS') && profile.includes('handleShareMore'));

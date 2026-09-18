@@ -46,8 +46,8 @@ ok('PA-T07 le bouton ne touche pas shopping_items (navigation pure)', !/shopping
 ok('PA-T07 InventoryHeader reste présentation pure (aucun supabase/insert)', !/\bsupabase\b|shopping_items|\.insert\(/.test(inv));
 
 // ── PA-T08/09/10 : N6-12 non régressé (gaspi/conso ≠ intention d'achat) ──
-const consumePath = (strip(fridgeRaw).match(/const consumeItem = async[\s\S]*?\n  \};/) || [''])[0];
-ok('PA-T08 flux gaspi/conso (consumeItem) n\'appelle JAMAIS onShopping', consumePath.length > 0 && !consumePath.includes('onShopping'));
+const consumePath = (strip(fridgeRaw).match(/const submitStockUpdate = async[\s\S]*?\n  \};/) || [''])[0];
+ok('PA-T08 flux gaspi/conso (submitStockUpdate) n\'appelle JAMAIS onShopping', consumePath.length > 0 && !consumePath.includes('onShopping'));
 ok('PA-T09 flux conso ne crée aucune intention d\'achat (pas de shopping_items dans FridgeScreen)', !fridge.includes('shopping_items'));
 ok('PA-T10 aucun panneau GASPI repurchase restauré (Courses)', (() => { const shop = strip(readRaw('../screens/ShoppingListScreen.js')); return !shop.includes('TU GASPILLES SOUVENT') && !shop.includes('reviennent souvent'); })());
 

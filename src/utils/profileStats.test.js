@@ -16,27 +16,37 @@ const { computeProfileStats: F } = m.exports;
 let pass = 0, fail = 0;
 const ok = (label, cond) => { if (cond) pass++; else { fail++; console.log('FAIL ' + label); } };
 
-// ── Comptage LIGNES : consommé & non gaspillé = enregistré ; consommé & gaspillé = gaspillage déclaré ──
+// ── V2 : comptage LIGNES par DÉCLARATION canonique, avec CHEVAUCHEMENT possible (un mixte compte 2×) ──
+// used only (t,f) ; waste only (f,t) ; both (t,t) → compte dans les DEUX ; no cause (f,f) → aucun.
 const rows = [
-  { wasted: false }, { wasted: false }, { wasted: true }, { wasted: false }, { wasted: true },
+  { used_declared: true,  waste_declared: false }, // used
+  { used_declared: true,  waste_declared: false }, // used
+  { used_declared: false, waste_declared: true },  // waste
+  { used_declared: true,  waste_declared: true },  // MIXTE → used ET waste
+  { used_declared: false, waste_declared: false }, // aucune cause → ni l'un ni l'autre
 ];
 const r = F(rows);
-ok('consommé & !wasted → une consommation enregistrée (x3)', r.recordedConsumptions === 3);
-ok('wasted → un gaspillage déclaré (x2)', r.declaredWaste === 2);
+ok('used_declared → utilisations déclarées (x3 : 2 used + 1 mixte)', r.usedDeclaredCount === 3);
+ok('waste_declared → gaspillages déclarés (x2 : 1 waste + 1 mixte)', r.wasteDeclaredCount === 2);
+ok('§35 CHEVAUCHEMENT : les comptes NE somment PAS au total (3+2=5 ≠ 4 lignes causales / 5 lignes)', r.usedDeclaredCount + r.wasteDeclaredCount !== rows.length - 1);
+ok('§35 (f,f) ne compte dans AUCUN', r.usedDeclaredCount === 3 && r.wasteDeclaredCount === 2); // la 5e ligne n'ajoute rien
 
-// ── Aucune fabrication : entrées vides/absentes → 0, jamais NaN, jamais négatif, jamais argent/CO₂ ──
+// ── Aucune fabrication : entrées vides/absentes → 0, jamais NaN, jamais argent/CO₂ ──
 const z = F([]);
-ok('vide → tout à 0', z.recordedConsumptions === 0 && z.declaredWaste === 0);
-ok('args par défaut (aucun argument) → 0', (() => { const d = F(); return d.recordedConsumptions === 0 && d.declaredWaste === 0; })());
-ok('entrées non-tableau → 0 (fail-safe, jamais crash)', (() => { const n = F(null); return n.recordedConsumptions === 0 && n.declaredWaste === 0; })());
-ok('lignes nulles ignorées (pas de crash)', (() => { const n = F([null, { wasted: false }, undefined]); return n.recordedConsumptions === 1 && n.declaredWaste === 0; })());
+ok('vide → tout à 0', z.usedDeclaredCount === 0 && z.wasteDeclaredCount === 0);
+ok('args par défaut (aucun argument) → 0', (() => { const d = F(); return d.usedDeclaredCount === 0 && d.wasteDeclaredCount === 0; })());
+ok('entrées non-tableau → 0 (fail-safe, jamais crash)', (() => { const n = F(null); return n.usedDeclaredCount === 0 && n.wasteDeclaredCount === 0; })());
+ok('lignes nulles ignorées (pas de crash)', (() => { const n = F([null, { used_declared: true }, undefined]); return n.usedDeclaredCount === 1 && n.wasteDeclaredCount === 0; })());
 
-// ── quantité ne devient PAS une vérité de comptage d'unités : deux lignes même identité = 2 lignes ──
-ok('deux lignes = deux cohortes (jamais sommées en unités)', F([{ wasted: false, quantity: 5 }, { wasted: false, quantity: 3 }]).recordedConsumptions === 2);
+// ── waste_declared=false ne prouve PAS l'absence de gaspillage — on ne lit QUE les déclarations true ──
+ok('used non-déclaré (absent) → non compté (jamais inféré depuis wasted)', F([{ waste_declared: false }]).usedDeclaredCount === 0);
+
+// ── quantité ne devient PAS une vérité d'unités : deux lignes = 2 lignes ──
+ok('deux lignes = deux cohortes (jamais sommées en unités)', F([{ used_declared: true, quantity: 5 }, { used_declared: true, quantity: 3 }]).usedDeclaredCount === 2);
 
 // ── CONTRAT DE SORTIE : exactement 2 clés GLOBALES ; AUCUNE clé hebdo/argent/CO₂/score/comparaison ──
 const keys = Object.keys(F(rows)).sort();
-ok('sortie = exactement 2 clés globales', JSON.stringify(keys) === JSON.stringify(['declaredWaste', 'recordedConsumptions']));
+ok('sortie = exactement 2 clés globales', JSON.stringify(keys) === JSON.stringify(['usedDeclaredCount', 'wasteDeclaredCount']));
 const forbidden = ['week', 'savings', 'saved', 'money', 'euro', 'price', 'co2', 'score', 'grade', 'comparison', 'rate'];
 ok('AUCUNE clé hebdo/monétaire/CO₂/score/comparaison dans la sortie',
   !keys.some(k => forbidden.some(f => k.toLowerCase().includes(f))));

@@ -21,6 +21,7 @@ const { QUANTITY_AUTHORITY: QA, deriveQuantityState: D, formatQuantityLabel: F }
 
 const stripC = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 const fridge = stripC(fs.readFileSync(path.join(__dirname, '../screens/FridgeScreen.js'), 'utf8'));
+const updSheet = stripC(fs.readFileSync(path.join(__dirname, '../components/stock/StockUpdateSheet.js'), 'utf8'));
 const qtySrc = fs.readFileSync(path.join(__dirname, 'quantity.js'), 'utf8');
 
 let pass = 0, fail = 0;
@@ -48,11 +49,15 @@ ok('DISP FridgeScreen : plus de « 1 unité » littéral actif', !fridge.include
 ok('DISP FridgeScreen : plus de « N/M restants » (total_units interpolé)', !fridge.includes('total_units'));
 ok('DISP FridgeScreen : quantité gatée par formatQuantityLabel + garde', fridge.includes('formatQuantityLabel(item)') && fridge.includes('quantityLabel &&'));
 
-// ── CAUSALITÉ (CR-07) : consumed/wasted UNIQUEMENT via action explicite ──
-ok('CAUSE-T01 action explicite consommation présente (« J\'ai mangé ça »)', fridge.includes("J'ai mangé ça"));
-ok('CAUSE-T02 action explicite gaspillage présente (« Gaspillé »)', fridge.includes('Gaspillé'));
-ok('CAUSE-T03 écriture consumed/wasted groupée (consumeItem explicite)', fridge.includes('consumed: true, wasted'));
-ok('CAUSE-T04 transition zéro exige confirmation explicite (« Consommé ✅ »)', fridge.includes('Consommé ✅'));
+// ── CAUSALITÉ (CR-07) : consumed/wasted UNIQUEMENT via action explicite. Renforcé par la mise à jour
+//    canonique — le client n'écrit PLUS consumed/wasted du tout ; c'est l'RPC (serveur) qui les pose,
+//    invoquée SEULEMENT depuis le CTA explicite du single-sheet (outcome + reste choisis par l'utilisateur). ──
+ok('CAUSE-T01 action explicite « utilisé » présente (single-sheet)', updSheet.includes('J’en ai utilisé'));
+ok('CAUSE-T02 action explicite « jeté » présente (single-sheet)', updSheet.includes('J’en ai jeté'));
+ok('CAUSE-T03 le client N\'ÉCRIT PLUS consumed/wasted (posé serveur via applyStockUpdate)',
+  !fridge.includes('consumed: true') && fridge.includes('applyStockUpdate(supabase'));
+ok('CAUSE-T04 clôture (zéro) = sélection EXPLICITE (outcome requis par canSubmit ; EMPTY via CTA, jamais auto)',
+  updSheet.includes('canSubmit(') && fridge.includes("remainingLevel === 'EMPTY'"));
 ok('TOTAL-T01 aucune arithmétique causale total_units - quantity', !/total_units\s*-/.test(fridge));
 
 // ── N6-08 : provenance forward → une quantité EXPLICITE devient KNOWN (survit au roundtrip JSON) ──
